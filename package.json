@@ -11,7 +11,11 @@
     "dev:backend": "cd backend && uvicorn app.main:app --reload --port 8000",
     "build:frontend": "npm run --prefix frontend build",
     "lint:frontend": "npm run --prefix frontend lint",
-    "test:frontend": "npm run --prefix frontend test"
+    "lint:backend": "cd backend && ruff check . --config ruff.toml",
+    "format:backend": "cd backend && ruff format . --config ruff.toml",
+    "lint": "npm run lint:frontend",
+    "test:frontend": "npm run --prefix frontend test",
+    "test:backend": "cd backend && pytest"
   },
   "keywords": [
     "ai",
