@@ -1,0 +1,29 @@
+{
+  "name": "devmind-ai-copilot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DevMind: AI Engineering Copilot - Autonomous Code Q&A, SAST Analysis, and Automation",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run --prefix frontend dev",
+    "dev:backend": "cd backend && uvicorn app.main:app --reload --port 8000",
+    "build:frontend": "npm run --prefix frontend build",
+    "lint:frontend": "npm run --prefix frontend lint",
+    "test:frontend": "npm run --prefix frontend test"
+  },
+  "keywords": [
+    "ai",
+    "copilot",
+    "langgraph",
+    "langchain",
+    "fastapi",
+    "nextjs",
+    "mongodb-atlas",
+    "ast-parsing",
+    "rag"
+  ],
+  "author": "DevMind Team",
+  "license": "Apache-2.0"
+}
