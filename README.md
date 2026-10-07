@@ -32,8 +32,23 @@ DevMind is an intelligent AI assistant platform designed to help developers navi
 │   ├── tailwind.config.ts   # Tailwind CSS styling configuration
 │   └── tsconfig.json        # TypeScript configuration
 ├── package.json             # Root monorepo workspace configuration
-├── IMPLEMENTATION_PLAN.md   # 10-phase roadmap with commit-by-commit specs
+├── docker-compose.yml       # Local MongoDB Atlas & Redis containers
+├── .env.example             # Environment variable template
 └── README.md                # Project documentation
+```
+
+## Local Infrastructure
+
+Start MongoDB Atlas Local and Redis with Docker Compose:
+
+```bash
+docker compose up -d
+```
+
+Copy the environment configuration template:
+
+```bash
+cp .env.example .env
 ```
 
 ## Quick Start
