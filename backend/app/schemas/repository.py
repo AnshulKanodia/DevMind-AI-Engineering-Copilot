@@ -49,3 +49,18 @@ class RepoScanResponse(BaseModel):
     skipped_count: int
     total_code_lines: int
     eligible_files: List[RepoFileMetadata]
+
+
+class SecretFindingAudit(BaseModel):
+    file_path: str
+    secret_type: str
+    line_number: int
+    masked_preview: str
+
+
+class RepoSecretsAuditResponse(BaseModel):
+    repo_id: str
+    total_secrets_found: int
+    total_files_with_secrets: int
+    sanitized: bool
+    findings: List[SecretFindingAudit] = []
