@@ -56,6 +56,8 @@ yarn-error.log*
 .next/
 out/
 .turbo/
+next-env.d.ts
+package-lock.json
 
 # Ephemeral Repositories & Sandbox
 /tmp/
