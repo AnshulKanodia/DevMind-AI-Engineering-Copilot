@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 from app.core.config import get_settings
 from app.schemas.repository import RepoCloneRequest, RepoCloneResponse
 from app.services.sandbox_manager import sandbox_manager
+from app.services.file_filter import file_filter_service
 
 
 class GitClonerService:
@@ -86,21 +87,43 @@ class GitClonerService:
             request.repo_url, request.access_token
         )
 
-        # Build git clone command line parameters
-        clone_cmd = ["git", "clone"]
-        if request.shallow:
-            clone_cmd.extend(["--depth", "1"])
-        if request.branch:
-            clone_cmd.extend(["--branch", request.branch])
-
-        clone_cmd.extend([auth_url, str(sandbox_dir)])
-
         try:
-            # Execute clone
-            await self._run_git_command(
-                clone_cmd,
-                timeout=self.settings.CLONE_TIMEOUT_SECONDS,
-            )
+            if request.sparse_paths and len(request.sparse_paths) > 0:
+                # Sparse checkout pipeline: clone with blob filter, set cone, checkout branch
+                sparse_clone_cmd = [
+                    "git", "clone",
+                    "--filter=blob:none",
+                    "--no-checkout",
+                ]
+                if request.shallow:
+                    sparse_clone_cmd.extend(["--depth", "1"])
+                if request.branch:
+                    sparse_clone_cmd.extend(["--branch", request.branch])
+
+                sparse_clone_cmd.extend([auth_url, str(sandbox_dir)])
+                await self._run_git_command(sparse_clone_cmd, timeout=self.settings.CLONE_TIMEOUT_SECONDS)
+
+                # Initialize sparse-checkout and specify paths
+                await self._run_git_command(["git", "sparse-checkout", "init", "--cone"], cwd=sandbox_dir)
+                sparse_set_cmd = ["git", "sparse-checkout", "set"] + request.sparse_paths
+                await self._run_git_command(sparse_set_cmd, cwd=sandbox_dir)
+
+                # Checkout the target branch
+                target_branch = request.branch or "main"
+                await self._run_git_command(["git", "checkout", target_branch], cwd=sandbox_dir)
+            else:
+                # Standard shallow clone pipeline
+                clone_cmd = ["git", "clone"]
+                if request.shallow:
+                    clone_cmd.extend(["--depth", "1"])
+                if request.branch:
+                    clone_cmd.extend(["--branch", request.branch])
+
+                clone_cmd.extend([auth_url, str(sandbox_dir)])
+                await self._run_git_command(
+                    clone_cmd,
+                    timeout=self.settings.CLONE_TIMEOUT_SECONDS,
+                )
 
             # Check disk usage against max size quota
             total_size = sandbox_manager.check_size_quota(sandbox_dir)
@@ -113,12 +136,11 @@ class GitClonerService:
                 ["git", "log", "-1", "--pretty=%B"], cwd=sandbox_dir, timeout=10
             )
 
-            # Count total source files
-            file_count = 0
-            for _, _, filenames in os.walk(sandbox_dir):
-                file_count += len(filenames)
+            # Apply file filter guards to inventory eligible code files
+            scan_summary = file_filter_service.scan_repository(sandbox_dir)
 
             duration = round(time.time() - start_time, 2)
+            sample_files = [f.relative_path for f in scan_summary.eligible_files[:10]]
 
             return RepoCloneResponse(
                 repo_id=r_id,
@@ -127,9 +149,13 @@ class GitClonerService:
                 commit_sha=commit_sha,
                 commit_message=commit_msg.strip(),
                 sandbox_path=str(sandbox_dir),
-                total_files=file_count,
+                total_files_scanned=scan_summary.total_scanned,
+                eligible_files_count=scan_summary.eligible_count,
+                skipped_files_count=scan_summary.skipped_count,
+                total_code_lines=scan_summary.total_code_lines,
                 total_size_bytes=total_size,
                 duration_seconds=duration,
+                sample_eligible_files=sample_files,
                 status="cloned",
             )
 
