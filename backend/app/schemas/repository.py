@@ -64,3 +64,13 @@ class RepoSecretsAuditResponse(BaseModel):
     total_files_with_secrets: int
     sanitized: bool
     findings: List[SecretFindingAudit] = []
+
+
+class RepoIndexResponse(BaseModel):
+    repo_id: str
+    status: str = "indexed"
+    files_indexed: int
+    chunks_created: int
+    total_tokens: int
+    cost_estimate_usd: float
+    duration_seconds: float
