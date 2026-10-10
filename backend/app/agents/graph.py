@@ -3,9 +3,11 @@ from typing import Any, Callable, Dict, List, Optional
 
 from app.agents.state import AgentIntent, AgentState
 from app.schemas.bug import BugHuntRequest
+from app.schemas.security import SecurityAuditRequest
 from app.services.bug_agent import bug_agent_service
 from app.services.qa_agent import qa_agent_service
 from app.services.router_agent import router_agent_service
+from app.services.security_agent import security_agent_service
 
 logger = logging.getLogger("devmind.agents.graph")
 
@@ -94,6 +96,32 @@ async def security_node(state: AgentState) -> AgentState:
     """Security node: vulnerability scanning and remediation."""
     state["current_step"] = "executing_security_audit"
     state["next_node"] = "format_node"
+
+    repo_id = state.get("repo_id", "")
+    query = state.get("user_query", "")
+
+    req = SecurityAuditRequest(
+        repo_id=repo_id,
+        query=query,
+    )
+    audit_resp = await security_agent_service.audit_security(req)
+
+    state["diagnostic_findings"] = [v.model_dump() for v in audit_resp.vulnerabilities]
+    state["final_response"] = audit_resp.summary
+
+    # Extract citation tags from vulnerabilities
+    citations = [f"{v.file_path}:{v.line_number}" for v in audit_resp.vulnerabilities]
+    state["citations"] = sorted(list(set(citations)))
+
+    if "metadata" not in state or state["metadata"] is None:
+        state["metadata"] = {}
+    state["metadata"]["total_vulnerabilities"] = audit_resp.total_vulnerabilities
+    state["metadata"]["critical_count"] = audit_resp.critical_count
+    state["metadata"]["high_count"] = audit_resp.high_count
+    state["metadata"]["medium_count"] = audit_resp.medium_count
+    state["metadata"]["low_count"] = audit_resp.low_count
+    state["metadata"]["model_used"] = audit_resp.model_used
+
     return state
 
 
