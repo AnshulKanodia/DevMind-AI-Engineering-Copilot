@@ -2,6 +2,8 @@ import logging
 from typing import Any, Callable, Dict, List, Optional
 
 from app.agents.state import AgentIntent, AgentState
+from app.schemas.bug import BugHuntRequest
+from app.services.bug_agent import bug_agent_service
 from app.services.qa_agent import qa_agent_service
 from app.services.router_agent import router_agent_service
 
@@ -56,9 +58,35 @@ async def qa_node(state: AgentState) -> AgentState:
 
 
 async def bug_node(state: AgentState) -> AgentState:
-    """Bug Detection node: static analysis correlation."""
+    """Bug Detection node: static analysis correlation and defect diagnosis."""
     state["current_step"] = "executing_bug_hunt"
     state["next_node"] = "format_node"
+
+    repo_id = state.get("repo_id", "")
+    query = state.get("user_query", "")
+
+    req = BugHuntRequest(
+        repo_id=repo_id,
+        query=query,
+    )
+    hunt_resp = await bug_agent_service.hunt_bugs(req)
+
+    state["diagnostic_findings"] = [f.model_dump() for f in hunt_resp.findings]
+    state["final_response"] = hunt_resp.summary
+
+    # Extract citation tags from findings
+    citations = [f"{f.file_path}:{f.line_number}" for f in hunt_resp.findings]
+    state["citations"] = sorted(list(set(citations)))
+
+    if "metadata" not in state or state["metadata"] is None:
+        state["metadata"] = {}
+    state["metadata"]["total_bugs"] = hunt_resp.total_bugs
+    state["metadata"]["critical_count"] = hunt_resp.critical_count
+    state["metadata"]["high_count"] = hunt_resp.high_count
+    state["metadata"]["medium_count"] = hunt_resp.medium_count
+    state["metadata"]["low_count"] = hunt_resp.low_count
+    state["metadata"]["model_used"] = hunt_resp.model_used
+
     return state
 
 
