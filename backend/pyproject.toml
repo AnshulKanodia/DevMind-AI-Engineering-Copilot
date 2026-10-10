@@ -23,6 +23,8 @@ dependencies = [
     "python-multipart>=0.0.9",
     "pyjwt>=2.8.0",
     "cryptography>=42.0.5",
+    "langgraph>=0.0.30",
+    "langchain-core>=0.1.30",
 ]
 
 [project.optional-dependencies]
