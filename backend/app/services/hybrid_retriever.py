@@ -100,6 +100,9 @@ class HybridRetrieverService:
         scorer.fit([c.content for c in chunks])
         self._bm25_indices[repo_id] = scorer
 
+    # Alias for indexing convenience
+    index_corpus = register_repo_chunks
+
     async def search(self, params: HybridSearchQuery) -> HybridSearchResponse:
         """Execute hybrid search using alpha-weighted score fusion."""
         repo_id = params.repo_id

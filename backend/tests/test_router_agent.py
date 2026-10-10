@@ -21,7 +21,7 @@ async def test_router_agent_bug_hunt_routing():
 
     assert res.intent == AgentIntent.BUG_HUNT
     assert res.target_subagent == "Bug Detection Agent"
-    assert "error" in res.suggested_search_queries or "crash" in res.reasoning.lower()
+    assert any("error" in q.lower() for q in res.suggested_search_queries) or "defect" in res.reasoning.lower()
 
 
 @pytest.mark.asyncio

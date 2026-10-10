@@ -2,6 +2,7 @@ import logging
 from typing import Any, Callable, Dict, List, Optional
 
 from app.agents.state import AgentIntent, AgentState
+from app.services.qa_agent import qa_agent_service
 from app.services.router_agent import router_agent_service
 
 logger = logging.getLogger("devmind.agents.graph")
@@ -35,6 +36,22 @@ async def qa_node(state: AgentState) -> AgentState:
     """Code Q&A node: grounded retrieval and answer synthesis."""
     state["current_step"] = "executing_qa"
     state["next_node"] = "format_node"
+
+    repo_id = state.get("repo_id", "")
+    query = state.get("user_query", "")
+
+    # Retrieve and synthesize grounded answer with line citations
+    qa_resp = await qa_agent_service.answer_query(repo_id=repo_id, query=query)
+
+    state["final_response"] = qa_resp.answer
+    state["citations"] = qa_resp.citations
+    state["retrieved_chunks"] = [c.model_dump() for c in qa_resp.retrieved_chunks]
+
+    if "metadata" not in state or state["metadata"] is None:
+        state["metadata"] = {}
+    state["metadata"]["model_used"] = qa_resp.model_used
+    state["metadata"]["is_grounded"] = qa_resp.is_grounded
+
     return state
 
 
