@@ -2,6 +2,7 @@ import logging
 from typing import Any, Callable, Dict, List, Optional
 
 from app.agents.state import AgentIntent, AgentState
+from app.services.router_agent import router_agent_service
 
 logger = logging.getLogger("devmind.agents.graph")
 
@@ -12,24 +13,21 @@ logger = logging.getLogger("devmind.agents.graph")
 
 async def router_node(state: AgentState) -> AgentState:
     """Analyze user query and determine appropriate specialized sub-agent."""
-    query = state.get("user_query", "").lower()
+    query = state.get("user_query", "")
     state["iteration_count"] = state.get("iteration_count", 0) + 1
     state["current_step"] = "routing"
 
-    if any(k in query for k in ["bug", "defect", "error", "broken", "issue", "crash"]):
-        intent = AgentIntent.BUG_HUNT.value
-    elif any(k in query for k in ["security", "sqli", "injection", "vulnerability", "cve", "owasp", "sanitize"]):
-        intent = AgentIntent.SECURITY_AUDIT.value
-    elif any(k in query for k in ["test", "unit test", "jest", "pytest", "mock", "assert", "coverage"]):
-        intent = AgentIntent.TEST_GEN.value
-    elif any(k in query for k in ["doc", "document", "readme", "comment", "explain architecture", "diagram"]):
-        intent = AgentIntent.DOC_GEN.value
-    elif any(k in query for k in ["pr", "pull request", "diff", "review change", "patch"]):
-        intent = AgentIntent.PR_REVIEW.value
-    else:
-        intent = AgentIntent.CODE_QA.value
+    # Invoke LLM Router Agent
+    result = await router_agent_service.classify_query(query)
 
-    state["intent"] = intent
+    state["intent"] = result.intent.value
+    if "metadata" not in state or state["metadata"] is None:
+        state["metadata"] = {}
+
+    state["metadata"]["router_confidence"] = result.confidence
+    state["metadata"]["router_reasoning"] = result.reasoning
+    state["metadata"]["target_subagent"] = result.target_subagent
+    state["metadata"]["suggested_search_queries"] = result.suggested_search_queries
     return state
 
 
