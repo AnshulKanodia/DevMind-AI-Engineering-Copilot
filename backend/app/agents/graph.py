@@ -4,10 +4,12 @@ from typing import Any, Callable, Dict, List, Optional
 from app.agents.state import AgentIntent, AgentState
 from app.schemas.bug import BugHuntRequest
 from app.schemas.security import SecurityAuditRequest
+from app.schemas.test_gen import TestGenRequest
 from app.services.bug_agent import bug_agent_service
 from app.services.qa_agent import qa_agent_service
 from app.services.router_agent import router_agent_service
 from app.services.security_agent import security_agent_service
+from app.services.test_agent import test_agent_service
 
 logger = logging.getLogger("devmind.agents.graph")
 
@@ -129,6 +131,27 @@ async def test_node(state: AgentState) -> AgentState:
     """Test Generation node: test scaffold synthesis."""
     state["current_step"] = "executing_test_gen"
     state["next_node"] = "format_node"
+
+    repo_id = state.get("repo_id", "")
+    query = state.get("user_query", "")
+
+    req = TestGenRequest(
+        repo_id=repo_id,
+        query=query,
+    )
+    test_resp = await test_agent_service.generate_tests(req)
+
+    state["final_response"] = test_resp.summary
+    state["citations"] = [test_resp.target_file] if test_resp.target_file else []
+
+    if "metadata" not in state or state["metadata"] is None:
+        state["metadata"] = {}
+    state["metadata"]["framework"] = test_resp.framework.value
+    state["metadata"]["target_symbol"] = test_resp.target_symbol
+    state["metadata"]["target_file"] = test_resp.target_file
+    state["metadata"]["total_tests"] = test_resp.total_tests
+    state["metadata"]["model_used"] = test_resp.model_used
+
     return state
 
 
