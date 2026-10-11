@@ -3,9 +3,11 @@ from typing import Any, Callable, Dict, List, Optional
 
 from app.agents.state import AgentIntent, AgentState
 from app.schemas.bug import BugHuntRequest
+from app.schemas.doc_gen import DocGenRequest
 from app.schemas.security import SecurityAuditRequest
 from app.schemas.test_gen import TestGenRequest
 from app.services.bug_agent import bug_agent_service
+from app.services.doc_agent import doc_agent_service
 from app.services.qa_agent import qa_agent_service
 from app.services.router_agent import router_agent_service
 from app.services.security_agent import security_agent_service
@@ -156,9 +158,31 @@ async def test_node(state: AgentState) -> AgentState:
 
 
 async def doc_node(state: AgentState) -> AgentState:
-    """Documentation node: module summaries and markdown synthesis."""
+    """Documentation node: module summaries, docstrings, and Mermaid diagrams."""
     state["current_step"] = "executing_doc_gen"
     state["next_node"] = "format_node"
+
+    repo_id = state.get("repo_id", "")
+    query = state.get("user_query", "")
+
+    req = DocGenRequest(
+        repo_id=repo_id,
+        query=query,
+        include_mermaid=True,
+    )
+    doc_resp = await doc_agent_service.generate_documentation(req)
+
+    state["final_response"] = doc_resp.markdown_documentation
+    state["citations"] = [doc_resp.target_file] if doc_resp.target_file else []
+
+    if "metadata" not in state or state["metadata"] is None:
+        state["metadata"] = {}
+    state["metadata"]["doc_format"] = doc_resp.doc_format.value
+    state["metadata"]["target_file"] = doc_resp.target_file
+    state["metadata"]["documented_symbols_count"] = len(doc_resp.documented_symbols)
+    state["metadata"]["has_mermaid"] = doc_resp.mermaid_diagram is not None
+    state["metadata"]["model_used"] = doc_resp.model_used
+
     return state
 
 
