@@ -18,8 +18,9 @@
 * **Hybrid Vector & Lexical Search:** Unifies dense OpenAI embeddings (`text-embedding-3-small`, 1536 dims) with BM25 Okapi sparse keyword matching using $\alpha$-weighted reciprocal rank fusion.
 * **Pre-Ingestion Secrets Redaction:** Scans source code using regex patterns and Shannon information entropy ($H > 4.5$) to detect and redact AWS credentials, GitHub PATs, OpenAI keys, Slack tokens, and private keys before vector indexing.
 * **Sandboxed Ephemeral Ingestion:** Clones repositories into isolated temporary scratch directories with path-traversal guards, storage quotas, and token-masked URLs.
-* **Deterministic SAST & Security Review (Upcoming Phase 5):** Pairs Bandit, ESLint, and Semgrep diagnostics with LLM reasoning to identify vulnerabilities while eliminating false positives.
-* **Automated Test & PR Automation (Upcoming Phases 6–7):** Generates pytest/Jest unit tests and drafts auto-fix pull requests under strict human approval gates.
+* **Deterministic SAST, Bug Detection & OWASP Security Review:** Combines Bandit, ESLint, Semgrep, and AST visitors with LLM reasoning to detect SQLi, RCE, weak cryptography, and runtime defects while eliminating false positives.
+* **Automated Unit Test & Living Documentation Synthesis:** Generates runnable `pytest` and `Jest` test suites with automatic mock isolation (`unittest.mock` / `jest.fn()`) alongside Google/Sphinx/JSDoc docstrings and Mermaid architecture diagrams.
+* **Real-Time SSE Multi-Agent Streaming:** Streams LangGraph node transitions, intent classification telemetry, retrieval counts, incremental tokens, and verified citations over W3C Server-Sent Events (`/api/v1/agents/stream`).
 
 ---
 
@@ -54,11 +55,13 @@ flowchart TD
         RedisCache[(Redis Cache & Sessions)]
     end
 
-    subgraph Agents ["LangGraph Agentic Layer (Phase 4+)"]
+    subgraph Agents ["LangGraph Multi-Agent Orchestration Layer"]
         RouterAgent[Intent Router Agent]
         QAAgent[Code Q&A Agent]
         BugAgent[Bug Detection Agent]
+        SecAgent[Security Audit Agent]
         TestAgent[Test Generation Agent]
+        DocAgent[Documentation & Mermaid Agent]
         PRAgent[PR Review Agent]
     end
 
@@ -75,7 +78,7 @@ flowchart TD
     Chunker --> BM25Index
 
     Router --> RouterAgent
-    RouterAgent --> QAAgent & BugAgent & TestAgent & PRAgent
+    RouterAgent --> QAAgent & BugAgent & SecAgent & TestAgent & DocAgent & PRAgent
     QAAgent --> AtlasVector & BM25Index
 ```
 
@@ -86,10 +89,14 @@ flowchart TD
 ```text
 ├── backend/
 │   ├── app/
+│   │   ├── agents/
+│   │   │   ├── state.py              # Typed AgentState & AgentIntent definitions
+│   │   │   └── graph.py              # Stateful LangGraph multi-agent workflow engine
 │   │   ├── api/
 │   │   │   ├── deps.py               # Shared auth & security dependencies
 │   │   │   └── v1/
 │   │   │       ├── endpoints/
+│   │   │       │   ├── agents.py     # Multi-agent chat & real-time SSE streaming (/chat, /stream)
 │   │   │       │   ├── auth.py       # GitHub OAuth routes (/login, /callback, /me)
 │   │   │       │   ├── repos.py      # Clone, scan, audit-secrets, index, search
 │   │   │       │   └── git_ops.py    # Git commits, branch diffs, tags
@@ -98,17 +105,25 @@ flowchart TD
 │   │   │   ├── config.py             # Pydantic v2 typed settings validation
 │   │   │   ├── database.py           # Async Motor / MongoDB connection manager
 │   │   │   └── security.py           # Fernet AES-256 encryption & JWT lifecycle
-│   │   ├── schemas/                  # Pydantic data transfer models
+│   │   ├── schemas/                  # Pydantic data transfer models (QA, Bug, Security, Test, Doc, SAST)
 │   │   ├── services/
 │   │   │   ├── ast_parser.py         # Language-aware AST parser (Py, TS, Go, Java)
+│   │   │   ├── bug_agent.py          # Static AST defect checker & Bug Detection Agent
+│   │   │   ├── doc_agent.py          # Docstring synthesizer & Mermaid diagram generator
 │   │   │   ├── embedding_service.py  # Batched OpenAI embeddings with rate limiters
 │   │   │   ├── file_filter.py        # Whitelist code filter & binary/noise pruner
 │   │   │   ├── git_cloner.py         # Subprocess Git cloner with token masking
 │   │   │   ├── git_metadata.py       # Commit logs & unified patch parser
 │   │   │   ├── hybrid_retriever.py   # BM25 + Vector k-NN reciprocal rank fusion
+│   │   │   ├── qa_agent.py           # Grounded Code Q&A Agent with strict line citations
+│   │   │   ├── router_agent.py       # LLM & heuristic Intent Router Agent
 │   │   │   ├── sandbox_manager.py    # Ephemeral UUID directories & quota guards
+│   │   │   ├── sast_runner.py        # Isolated Bandit, Semgrep & ESLint SAST runner
 │   │   │   ├── secrets_sanitizer.py  # Regex & Shannon entropy credential redactor
-│   │   │   └── semantic_chunker.py   # Boundary-preserving code block splitter
+│   │   │   ├── security_agent.py     # OWASP Top 10 & CWE Security Audit Agent
+│   │   │   ├── semantic_chunker.py   # Boundary-preserving code block splitter
+│   │   │   ├── streaming_service.py  # W3C Server-Sent Events (SSE) streaming orchestrator
+│   │   │   └── test_agent.py         # Unit Test Generation Agent (pytest / Jest)
 │   │   └── main.py                   # FastAPI application initialization & CORS
 │   ├── pyproject.toml                # Python package metadata
 │   ├── requirements.txt              # Backend dependencies
@@ -142,9 +157,9 @@ flowchart TD
 | **Phase 1** | **Monorepo Architecture, Local Infra & GitHub OAuth** | ✅ Complete |
 | **Phase 2** | **Sandboxed Git Ingestion, File Filtering & Secrets Redaction** | ✅ Complete |
 | **Phase 3** | **AST Parsing, Semantic Chunking & MongoDB Atlas Hybrid Search** | ✅ Complete |
-| **Phase 4** | **LangGraph Agent Core, Intent Router & Code Q&A Subagent** | ⏳ Next |
-| **Phase 5** | **Hybrid Static Analysis (Bandit / ESLint / Semgrep) & Bug Hunter** | ⏳ Planned |
-| **Phase 6** | **Automated Unit Test & Living Architecture Documentation Synthesis** | ⏳ Planned |
+| **Phase 4** | **LangGraph Agent Core, Intent Router, Code Q&A & SSE Streaming** | ✅ Complete |
+| **Phase 5** | **Hybrid Static Analysis (Bandit / ESLint / Semgrep), Bug & Security Agents** | 🔄 In Progress |
+| **Phase 6** | **Automated Unit Test & Living Architecture Documentation Synthesis** | 🔄 In Progress |
 | **Phase 7** | **GitHub PR Diff Review & Human-in-the-Loop Auto-Fixing** | ⏳ Planned |
 | **Phase 8** | **Interactive Next.js Portal with Citation Previews & Live Monaco Diff** | ⏳ Planned |
 | **Phase 9** | **LangSmith Full-Stack Tracing, Prometheus Metrics & Token Quotas** | ⏳ Planned |
@@ -219,6 +234,10 @@ DevMind Web UI will be accessible at:
 * `GET /api/v1/git/{repo_id}/commits`: Returns chronological commit logs with authors, hashes, and messages.
 * `GET /api/v1/git/{repo_id}/diff`: Computes unified diffs with line additions/deletions between any two Git references.
 * `GET /api/v1/git/{repo_id}/tags`: Lists release tags and annotated release notes.
+
+### Multi-Agent Orchestration & SSE Streaming
+* `POST /api/v1/agents/chat`: Executes the LangGraph multi-agent workflow (Router -> Q&A / Bug / Security / Test / Doc) and returns structured JSON with citations.
+* `POST /api/v1/agents/stream`: Streams real-time W3C Server-Sent Events (`text/event-stream`) across node transitions, intent classification, retrieval counts, token chunks, and citations.
 
 ---
 
