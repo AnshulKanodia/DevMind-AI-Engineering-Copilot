@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import agents, auth, git_ops, repos
+from app.api.v1.endpoints import agents, auth, git_ops, repos, scans
 
 api_router = APIRouter()
 
@@ -14,6 +14,9 @@ api_router.include_router(git_ops.router, prefix="/git", tags=["Git Metadata"])
 
 # Register Multi-Agent Orchestration & SSE Streaming endpoints
 api_router.include_router(agents.router, prefix="/agents", tags=["Agents & Streaming"])
+
+# Register On-Demand SAST, Bug & Security Scan endpoints
+api_router.include_router(scans.router, prefix="/scans", tags=["SAST & Security Scans"])
 
 
 @api_router.get("/status", tags=["Status"])

@@ -64,3 +64,36 @@ class SASTRunnerResponse(BaseModel):
     timed_out: bool = Field(
         default=False, description="Whether any underlying tool exceeded its timeout"
     )
+
+
+class FullRepoAuditRequest(BaseModel):
+    """Request payload for combined SAST, bug detection, and OWASP security audit."""
+
+    target_path: Optional[str] = Field(
+        default=None, description="Optional single file path filter"
+    )
+    code_snippet: Optional[str] = Field(
+        default=None, description="Optional code snippet to audit directly"
+    )
+    query: Optional[str] = Field(
+        default=None, description="Optional focus query for repository vector retrieval"
+    )
+
+
+class FullRepoAuditResponse(BaseModel):
+    """Unified repository health, bug, and security audit report."""
+
+    repo_id: str
+    risk_score: int = Field(
+        ..., ge=0, le=100, description="Composite risk score (0 = clean, 100 = critical risk)"
+    )
+    health_grade: str = Field(
+        ..., description="Overall codebase security & reliability grade ('A' through 'F')"
+    )
+    total_sast_alerts: int = Field(default=0)
+    total_bugs: int = Field(default=0)
+    total_vulnerabilities: int = Field(default=0)
+    sast_alerts: List[SASTNormalizedAlert] = Field(default_factory=list)
+    bug_summary: str = Field(default="")
+    security_summary: str = Field(default="")
+
