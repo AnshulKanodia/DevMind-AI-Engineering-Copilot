@@ -99,6 +99,7 @@ flowchart TD
 │   │   │       │   ├── agents.py     # Multi-agent chat & real-time SSE streaming (/chat, /stream)
 │   │   │       │   ├── auth.py       # GitHub OAuth routes (/login, /callback, /me)
 │   │   │       │   ├── repos.py      # Clone, scan, audit-secrets, index, search
+│   │   │       │   ├── scans.py      # On-demand SAST, Bug, Security & Full Audit endpoints
 │   │   │       │   └── git_ops.py    # Git commits, branch diffs, tags
 │   │   │       └── router.py         # Consolidated v1 API router
 │   │   ├── core/
@@ -158,7 +159,7 @@ flowchart TD
 | **Phase 2** | **Sandboxed Git Ingestion, File Filtering & Secrets Redaction** | ✅ Complete |
 | **Phase 3** | **AST Parsing, Semantic Chunking & MongoDB Atlas Hybrid Search** | ✅ Complete |
 | **Phase 4** | **LangGraph Agent Core, Intent Router, Code Q&A & SSE Streaming** | ✅ Complete |
-| **Phase 5** | **Hybrid Static Analysis (Bandit / ESLint / Semgrep), Bug & Security Agents** | 🔄 In Progress |
+| **Phase 5** | **Hybrid Static Analysis (Bandit / ESLint / Semgrep), Bug & Security Agents** | ✅ Complete |
 | **Phase 6** | **Automated Unit Test & Living Architecture Documentation Synthesis** | 🔄 In Progress |
 | **Phase 7** | **GitHub PR Diff Review & Human-in-the-Loop Auto-Fixing** | ⏳ Planned |
 | **Phase 8** | **Interactive Next.js Portal with Citation Previews & Live Monaco Diff** | ⏳ Planned |
@@ -238,6 +239,12 @@ DevMind Web UI will be accessible at:
 ### Multi-Agent Orchestration & SSE Streaming
 * `POST /api/v1/agents/chat`: Executes the LangGraph multi-agent workflow (Router -> Q&A / Bug / Security / Test / Doc) and returns structured JSON with citations.
 * `POST /api/v1/agents/stream`: Streams real-time W3C Server-Sent Events (`text/event-stream`) across node transitions, intent classification, retrieval counts, token chunks, and citations.
+
+### Static Analysis (SAST), Bug Detection & Security Audits
+* `POST /api/v1/scans/sast`: Executes isolated Bandit, Semgrep, and ESLint static analysis scans with normalized CWE alerts.
+* `POST /api/v1/scans/bugs`: Runs the AST & LLM Bug Detection Agent on repository code or inline snippets.
+* `POST /api/v1/scans/security`: Audits source code against OWASP Top 10 (2021) and CWE vulnerability classes with CVSS-style risk scoring.
+* `POST /api/v1/scans/full-audit/{repo_id}`: Runs a unified SAST + Bug + Security audit, returning a composite risk score (`0–100`) and letter health grade (`A`–`F`).
 
 ---
 

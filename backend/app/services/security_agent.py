@@ -206,7 +206,7 @@ class PythonSecurityASTChecker(ast.NodeVisitor):
 
                     if is_interpolated:
                         snippet = self._get_snippet(lineno, end_lineno)
-                        if any(k in snippet.upper() for k in ("SELECT", "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "FROM", "WHERE")):
+                        if any(k in snippet.upper() for k in ("SELECT ", "INSERT ", "UPDATE ", "DELETE ", "DROP ", "ALTER ")):
                             self.vulnerabilities.append(
                                 SecurityVulnerability(
                                     rule_id="SEC-INJ-001",
@@ -224,13 +224,41 @@ class PythonSecurityASTChecker(ast.NodeVisitor):
                                 )
                             )
 
+        # 6. Path Traversal via open() with interpolated f-string path
+        if isinstance(node.func, ast.Name) and node.func.id == "open" and node.args:
+            arg0 = node.args[0]
+            if isinstance(arg0, ast.JoinedStr):
+                f_const = "".join(
+                    v.value for v in arg0.values if isinstance(v, ast.Constant) and isinstance(v.value, str)
+                )
+                if "/" in f_const or "\\" in f_const:
+                    self.vulnerabilities.append(
+                        SecurityVulnerability(
+                            rule_id="SEC-PATH-001",
+                            cwe_id="CWE-22",
+                            owasp_category=OWASPCategory.A01_BROKEN_ACCESS_CONTROL,
+                            title="Potential Path Traversal in file `open()` call",
+                            description="Opening file paths constructed via unvalidated string interpolation allows attackers to traverse directories using `../` sequences.",
+                            severity=VulnerabilitySeverity.HIGH,
+                            file_path=self.file_path,
+                            line_number=lineno,
+                            end_line_number=end_lineno,
+                            code_snippet=self._get_snippet(lineno, end_lineno),
+                            remediation="Resolve paths with `Path(base_dir, user_input).resolve()` and verify `.is_relative_to(base_dir)` before opening.",
+                            confidence=0.93,
+                        )
+                    )
+
         self.generic_visit(node)
 
     def visit_JoinedStr(self, node: ast.JoinedStr):
         lineno = getattr(node, "lineno", 1)
         end_lineno = getattr(node, "end_lineno", lineno)
-        snippet = self._get_snippet(lineno, end_lineno)
-        if any(k in snippet.upper() for k in ("SELECT ", "INSERT ", "UPDATE ", "DELETE ", "DROP ", "ALTER ", "FROM ", "WHERE ")):
+        f_text = "".join(
+            v.value for v in node.values if isinstance(v, ast.Constant) and isinstance(v.value, str)
+        ).upper()
+        if any(k in f_text for k in ("SELECT ", "INSERT ", "UPDATE ", "DELETE ", "DROP ", "ALTER ")):
+            snippet = self._get_snippet(lineno, end_lineno)
             self.vulnerabilities.append(
                 SecurityVulnerability(
                     rule_id="SEC-INJ-001",
@@ -254,7 +282,7 @@ class PythonSecurityASTChecker(ast.NodeVisitor):
             lineno = getattr(node, "lineno", 1)
             end_lineno = getattr(node, "end_lineno", lineno)
             snippet = self._get_snippet(lineno, end_lineno)
-            if any(k in snippet.upper() for k in ("SELECT ", "INSERT ", "UPDATE ", "DELETE ", "DROP ", "ALTER ", "FROM ", "WHERE ")):
+            if any(k in snippet.upper() for k in ("SELECT ", "INSERT ", "UPDATE ", "DELETE ", "DROP ", "ALTER ")):
                 self.vulnerabilities.append(
                     SecurityVulnerability(
                         rule_id="SEC-INJ-001",
@@ -337,6 +365,24 @@ class SecurityAgentService:
                         code_snippet=line.strip(),
                         remediation="Sanitize HTML using DOMPurify before rendering, or prefer safe text elements.",
                         confidence=0.91,
+                    )
+                )
+
+            # 4. Dynamic eval() in JS/TS files
+            if not file_path.endswith((".py", ".pyw")) and re.search(r"\beval\s*\(", line):
+                vulns.append(
+                    SecurityVulnerability(
+                        rule_id="SEC-INJ-002",
+                        cwe_id="CWE-94",
+                        owasp_category=OWASPCategory.A03_INJECTION,
+                        title="Dangerous dynamic code execution via `eval()`",
+                        description="Invoking `eval()` in JavaScript/TypeScript executes arbitrary code and introduces severe XSS/injection risks.",
+                        severity=VulnerabilitySeverity.CRITICAL,
+                        file_path=file_path,
+                        line_number=idx,
+                        code_snippet=line.strip(),
+                        remediation="Remove `eval()` and use `JSON.parse()` or safe static dispatch.",
+                        confidence=0.96,
                     )
                 )
 
