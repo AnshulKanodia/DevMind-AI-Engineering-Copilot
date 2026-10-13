@@ -277,6 +277,10 @@ class WorkflowGraph:
         if target_node in self.nodes:
             state = await self.nodes[target_node](state)
 
+        # Conditional Interrupt Gate: if node requested human approval, pause workflow execution cleanly
+        if state.get("interrupted"):
+            return state
+
         # Step 3: Formatting & Citation node
         if "format_node" in self.nodes:
             state = await self.nodes["format_node"](state)
