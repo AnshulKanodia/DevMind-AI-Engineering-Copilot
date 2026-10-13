@@ -8,7 +8,9 @@ from app.schemas.approval import (
     ApprovalGateResponse,
     ApprovalStatus,
 )
+from app.schemas.patch import ApplyPatchRequest, ApplyPatchResponse
 from app.services.approval_service import approval_service
+from app.services.patch_applicator import patch_applicator_service
 
 router = APIRouter()
 
@@ -85,4 +87,37 @@ async def submit_approval_decision(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
+        )
+
+
+@router.post(
+    "/{checkpoint_id}/apply-autofix",
+    response_model=ApplyPatchResponse,
+    summary="Apply approved auto-fix patch and create a Draft PR on GitHub",
+)
+async def apply_autofix_and_create_draft_pr(
+    checkpoint_id: str,
+    request: ApplyPatchRequest,
+) -> ApplyPatchResponse:
+    """Apply an approved remediation patch to a new Git branch and open a Draft PR.
+    
+    Strictly verifies the human cryptographic approval token before touching Git or GitHub.
+    """
+    if request.checkpoint_id != checkpoint_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Checkpoint ID mismatch between URL and payload",
+        )
+
+    try:
+        return await patch_applicator_service.apply_patch_and_create_draft_pr(request)
+    except PermissionError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=str(exc),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to apply patch and create draft PR: {exc}",
         )
