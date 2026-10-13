@@ -97,6 +97,7 @@ flowchart TD
 │   │   │   └── v1/
 │   │   │       ├── endpoints/
 │   │   │       │   ├── agents.py     # Multi-agent chat & real-time SSE streaming (/chat, /stream)
+│   │   │       │   ├── approvals.py  # Human-in-the-Loop checkpoints & auto-fix PR approvals
 │   │   │       │   ├── auth.py       # GitHub OAuth routes (/login, /callback, /me)
 │   │   │       │   ├── repos.py      # Clone, scan, audit-secrets, index, search
 │   │   │       │   ├── scans.py      # On-demand SAST, Bug, Security & Full Audit endpoints
@@ -106,8 +107,9 @@ flowchart TD
 │   │   │   ├── config.py             # Pydantic v2 typed settings validation
 │   │   │   ├── database.py           # Async Motor / MongoDB connection manager
 │   │   │   └── security.py           # Fernet AES-256 encryption & JWT lifecycle
-│   │   ├── schemas/                  # Pydantic data transfer models (QA, Bug, Security, Test, Doc, SAST)
+│   │   ├── schemas/                  # Pydantic data transfer models (QA, Bug, Security, Test, Doc, SAST, PR, Approval, Patch, GitHub)
 │   │   ├── services/
+│   │   │   ├── approval_service.py   # Human-in-the-Loop checkpoints & HMAC cryptographic approval tokens
 │   │   │   ├── ast_parser.py         # Language-aware AST parser (Py, TS, Go, Java)
 │   │   │   ├── bug_agent.py          # Static AST defect checker & Bug Detection Agent
 │   │   │   ├── doc_agent.py          # Docstring synthesizer & Mermaid diagram generator
@@ -115,7 +117,10 @@ flowchart TD
 │   │   │   ├── file_filter.py        # Whitelist code filter & binary/noise pruner
 │   │   │   ├── git_cloner.py         # Subprocess Git cloner with token masking
 │   │   │   ├── git_metadata.py       # Commit logs & unified patch parser
+│   │   │   ├── github_client.py      # GitHub REST API client (PR diffs, reviews, issues, draft PRs)
 │   │   │   ├── hybrid_retriever.py   # BM25 + Vector k-NN reciprocal rank fusion
+│   │   │   ├── patch_applicator.py   # Safe diff patch applicator & Git branch/PR creator
+│   │   │   ├── pr_review_agent.py    # Git PR diff analyzer for security, bugs & missing tests
 │   │   │   ├── qa_agent.py           # Grounded Code Q&A Agent with strict line citations
 │   │   │   ├── router_agent.py       # LLM & heuristic Intent Router Agent
 │   │   │   ├── sandbox_manager.py    # Ephemeral UUID directories & quota guards
@@ -161,7 +166,7 @@ flowchart TD
 | **Phase 4** | **LangGraph Agent Core, Intent Router, Code Q&A & SSE Streaming** | ✅ Complete |
 | **Phase 5** | **Hybrid Static Analysis (Bandit / ESLint / Semgrep), Bug & Security Agents** | ✅ Complete |
 | **Phase 6** | **Automated Unit Test & Living Architecture Documentation Synthesis** | ✅ Complete |
-| **Phase 7** | **GitHub PR Diff Review & Human-in-the-Loop Auto-Fixing** | ⏳ Planned |
+| **Phase 7** | **GitHub PR Diff Review & Human-in-the-Loop Auto-Fixing** | ✅ Complete |
 | **Phase 8** | **Interactive Next.js Portal with Citation Previews & Live Monaco Diff** | ⏳ Planned |
 | **Phase 9** | **LangSmith Full-Stack Tracing, Prometheus Metrics & Token Quotas** | ⏳ Planned |
 | **Phase 10** | **RAG Golden Evaluation Suite, Hardening & CI/CD Deployment** | ⏳ Planned |
@@ -245,6 +250,13 @@ DevMind Web UI will be accessible at:
 * `POST /api/v1/scans/bugs`: Runs the AST & LLM Bug Detection Agent on repository code or inline snippets.
 * `POST /api/v1/scans/security`: Audits source code against OWASP Top 10 (2021) and CWE vulnerability classes with CVSS-style risk scoring.
 * `POST /api/v1/scans/full-audit/{repo_id}`: Runs a unified SAST + Bug + Security audit, returning a composite risk score (`0–100`) and letter health grade (`A`–`F`).
+
+### Human-in-the-Loop Approvals & PR Auto-Fixing
+* `POST /api/v1/approvals/checkpoint`: Creates a conditional interrupt checkpoint, pausing workflow execution before any write operations.
+* `GET /api/v1/approvals`: Lists pending, approved, and rejected checkpoints with optional `?repo_id=` filter.
+* `GET /api/v1/approvals/{checkpoint_id}`: Retrieves detailed checkpoint metadata and proposed unified patch diffs.
+* `POST /api/v1/approvals/{checkpoint_id}/decision`: Processes developer approval or rejection, issuing HMAC-signed cryptographic tokens upon approval.
+* `POST /api/v1/approvals/{checkpoint_id}/apply-autofix`: Verifies the human approval token, creates a dedicated Git branch (`devmind/autofix-<id>`), and opens a Draft PR on GitHub.
 
 ---
 
