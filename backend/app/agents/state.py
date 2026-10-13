@@ -35,6 +35,12 @@ class AgentState(TypedDict, total=False):
     diagnostic_findings: List[Dict[str, Any]]
     diff_context: Optional[str]
 
+    # Human-in-the-Loop Checkpoints & Approval Gates
+    interrupted: bool
+    checkpoint_id: Optional[str]
+    approval_status: Optional[str]
+    pending_action: Optional[Dict[str, Any]]
+
     # Results & Status
     final_response: Optional[str]
     metadata: Dict[str, Any]
@@ -60,6 +66,10 @@ def create_initial_state(
         "citations": [],
         "diagnostic_findings": [],
         "diff_context": None,
+        "interrupted": False,
+        "checkpoint_id": None,
+        "approval_status": None,
+        "pending_action": None,
         "final_response": None,
         "metadata": metadata or {},
         "error": None,
