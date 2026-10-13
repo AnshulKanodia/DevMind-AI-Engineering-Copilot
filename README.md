@@ -1,11 +1,14 @@
 # DevMind — AI Engineering Copilot
 
+[![Live Demo](https://img.shields.io/badge/Demo-devmind--copilot.vercel.app-brightgreen?logo=vercel)](https://devmind-copilot.vercel.app/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-14%2B-black?logo=next.js)](https://nextjs.org/)
 [![MongoDB Atlas](https://img.shields.io/badge/MongoDB-Atlas_Vector_Search-47A248?logo=mongodb)](https://www.mongodb.com/products/platform/atlas-vector-search)
 [![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-FF4F00)](https://langchain-ai.github.io/langgraph/)
+
+🌐 **Live Demo:** [https://devmind-copilot.vercel.app](https://devmind-copilot.vercel.app)
 
 **DevMind** is an enterprise-grade AI Engineering Copilot designed to help software teams understand, navigate, secure, and improve large codebases. Unlike generic chatbots, DevMind connects directly to GitHub repositories, parses code into syntax-aware AST chunks, indexes them into MongoDB Atlas Vector Search, and orchestrates specialized multi-agent workflows to deliver precise answers with exact source code citations.
 
