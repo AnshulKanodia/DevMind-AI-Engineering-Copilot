@@ -1,13 +1,16 @@
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
+import re
 from app.agents.state import AgentIntent, AgentState
 from app.schemas.bug import BugHuntRequest
 from app.schemas.doc_gen import DocGenRequest
+from app.schemas.pr_review import PRReviewRequest
 from app.schemas.security import SecurityAuditRequest
 from app.schemas.test_gen import TestGenRequest
 from app.services.bug_agent import bug_agent_service
 from app.services.doc_agent import doc_agent_service
+from app.services.pr_review_agent import pr_review_agent_service
 from app.services.qa_agent import qa_agent_service
 from app.services.router_agent import router_agent_service
 from app.services.security_agent import security_agent_service
@@ -189,6 +192,35 @@ async def doc_node(state: AgentState) -> AgentState:
 async def pr_node(state: AgentState) -> AgentState:
     """PR Review node: git diff analysis and review comment generation."""
     state["current_step"] = "executing_pr_review"
+    repo_id = state.get("repo_id", "default-repo")
+    query = state.get("user_query", "")
+
+    # Extract optional PR number from query (e.g. "Review PR #42")
+    pr_num = None
+    pr_match = re.search(r"#(\d+)", query)
+    if pr_match:
+        pr_num = int(pr_match.group(1))
+
+    raw_diff = state.get("metadata", {}).get("raw_diff") if state.get("metadata") else None
+    req = PRReviewRequest(
+        repo_id=repo_id,
+        pr_number=pr_num,
+        repo_full_name=repo_id if "/" in repo_id else None,
+        raw_diff=raw_diff,
+        query=query,
+    )
+    review_resp = await pr_review_agent_service.review_pull_request(req)
+
+    state["final_response"] = review_resp.summary
+    state["citations"] = review_resp.files_reviewed
+
+    if "metadata" not in state or state["metadata"] is None:
+        state["metadata"] = {}
+    state["metadata"]["pr_verdict"] = review_resp.verdict.value
+    state["metadata"]["pr_findings_count"] = len(review_resp.findings)
+    state["metadata"]["files_reviewed"] = review_resp.files_reviewed
+    state["metadata"]["model_used"] = review_resp.model_used
+
     state["next_node"] = "format_node"
     return state
 

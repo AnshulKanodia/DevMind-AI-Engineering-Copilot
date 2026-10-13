@@ -41,7 +41,16 @@ class RouterAgentService:
         q = query.lower()
         words = re.findall(r"[a-zA-Z0-9_]+", q)
 
-        if any(k in q for k in ["bug", "defect", "error", "broken", "issue", "crash", "fails", "exception"]):
+        if any(k in q for k in ["pull request", "review pr", "pr #", "pr review", "git diff", "review diff", "pr ", "diff"]):
+            return RouterClassificationResult(
+                intent=AgentIntent.PR_REVIEW,
+                confidence=0.95,
+                reasoning="Git pull request or diff inspection requested.",
+                extracted_keywords=[w for w in words if len(w) > 3][:5],
+                target_subagent="PR Review Agent",
+                suggested_search_queries=[query, "diff"],
+            )
+        elif any(k in q for k in ["bug", "defect", "error", "broken", "issue", "crash", "fails", "exception"]):
             return RouterClassificationResult(
                 intent=AgentIntent.BUG_HUNT,
                 confidence=0.92,
@@ -76,15 +85,6 @@ class RouterAgentService:
                 extracted_keywords=[w for w in words if len(w) > 3][:5],
                 target_subagent="Documentation Agent",
                 suggested_search_queries=[query, "overview", "main"],
-            )
-        elif any(k in q for k in ["pr", "pull request", "diff", "review change", "patch", "git diff"]):
-            return RouterClassificationResult(
-                intent=AgentIntent.PR_REVIEW,
-                confidence=0.91,
-                reasoning="Git pull request or diff inspection requested.",
-                extracted_keywords=[w for w in words if len(w) > 3][:5],
-                target_subagent="PR Review Agent",
-                suggested_search_queries=[query, "diff"],
             )
         else:
             return RouterClassificationResult(
