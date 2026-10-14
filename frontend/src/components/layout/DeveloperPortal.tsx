@@ -119,7 +119,12 @@ export function DeveloperPortal() {
                 onConnectRepo={() => setConnectModalOpen(true)}
               />
             )}
-            {activeTab === "chat" && <ChatView />}
+            {activeTab === "chat" && (
+              <ChatView
+                currentRepo={currentRepo}
+                currentBranch={currentBranch}
+              />
+            )}
             {activeTab === "security" && <SecurityView />}
             {activeTab === "tests" && <TestsView />}
             {activeTab === "pr_review" && <PRReviewView />}
