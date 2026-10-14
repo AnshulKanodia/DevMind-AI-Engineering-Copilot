@@ -6,9 +6,14 @@ import { Copy, Check, Terminal, FileCode } from "lucide-react";
 export interface MarkdownRendererProps {
   content: string;
   isStreaming?: boolean;
+  onOpenCitation?: (file: string, lines: string) => void;
 }
 
-export function MarkdownRenderer({ content, isStreaming }: MarkdownRendererProps) {
+export function MarkdownRenderer({
+  content,
+  isStreaming,
+  onOpenCitation,
+}: MarkdownRendererProps) {
   // Split content by code blocks (```lang ... ```)
   const codeBlockRegex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
   const parts: React.ReactNode[] = [];
@@ -19,7 +24,11 @@ export function MarkdownRenderer({ content, isStreaming }: MarkdownRendererProps
     const textBefore = content.substring(lastIndex, match.index);
     if (textBefore) {
       parts.push(
-        <TextSection key={`text-${lastIndex}`} text={textBefore} />
+        <TextSection
+          key={`text-${lastIndex}`}
+          text={textBefore}
+          onOpenCitation={onOpenCitation}
+        />
       );
     }
 
@@ -38,7 +47,6 @@ export function MarkdownRenderer({ content, isStreaming }: MarkdownRendererProps
 
   const remainingText = content.substring(lastIndex);
   if (remainingText) {
-    // If generation ends with an unclosed code block, handle it gracefully
     if (remainingText.startsWith("```")) {
       const firstLineBreak = remainingText.indexOf("\n");
       const language = firstLineBreak !== -1 ? remainingText.substring(3, firstLineBreak) : "code";
@@ -53,7 +61,11 @@ export function MarkdownRenderer({ content, isStreaming }: MarkdownRendererProps
       );
     } else {
       parts.push(
-        <TextSection key={`text-remaining`} text={remainingText} />
+        <TextSection
+          key={`text-remaining`}
+          text={remainingText}
+          onOpenCitation={onOpenCitation}
+        />
       );
     }
   }
@@ -68,75 +80,80 @@ export function MarkdownRenderer({ content, isStreaming }: MarkdownRendererProps
   );
 }
 
-function TextSection({ text }: { text: string }) {
+function TextSection({
+  text,
+  onOpenCitation,
+}: {
+  text: string;
+  onOpenCitation?: (file: string, lines: string) => void;
+}) {
   const lines = text.split("\n");
 
   return (
     <div className="space-y-2">
       {lines.map((line, idx) => {
-        // Empty lines
         if (!line.trim()) {
           return <div key={idx} className="h-1.5" />;
         }
 
-        // Headers
         if (line.startsWith("### ")) {
           return (
             <h4 key={idx} className="text-sm md:text-base font-bold text-white mt-3 mb-1">
-              {formatInline(line.replace(/^###\s+/, ""))}
+              {formatInline(line.replace(/^###\s+/, ""), onOpenCitation)}
             </h4>
           );
         }
         if (line.startsWith("## ")) {
           return (
             <h3 key={idx} className="text-base md:text-lg font-bold text-white mt-4 mb-2 border-b border-slate-800 pb-1">
-              {formatInline(line.replace(/^##\s+/, ""))}
+              {formatInline(line.replace(/^##\s+/, ""), onOpenCitation)}
             </h3>
           );
         }
         if (line.startsWith("# ")) {
           return (
             <h2 key={idx} className="text-lg md:text-xl font-extrabold text-white mt-4 mb-2">
-              {formatInline(line.replace(/^#\s+/, ""))}
+              {formatInline(line.replace(/^#\s+/, ""), onOpenCitation)}
             </h2>
           );
         }
 
-        // Bullet lists
         if (line.match(/^[-*]\s+/)) {
           return (
             <div key={idx} className="flex items-start gap-2 pl-2">
               <span className="text-sky-400 mt-1">&bull;</span>
-              <span className="flex-1">{formatInline(line.replace(/^[-*]\s+/, ""))}</span>
+              <span className="flex-1">
+                {formatInline(line.replace(/^[-*]\s+/, ""), onOpenCitation)}
+              </span>
             </div>
           );
         }
 
-        // Numbered lists
         if (line.match(/^\d+\.\s+/)) {
           const numMatch = line.match(/^(\d+)\.\s+/);
           const num = numMatch ? numMatch[1] : "1";
           return (
             <div key={idx} className="flex items-start gap-2 pl-2">
               <span className="font-mono text-sky-400 font-semibold">{num}.</span>
-              <span className="flex-1">{formatInline(line.replace(/^\d+\.\s+/, ""))}</span>
+              <span className="flex-1">
+                {formatInline(line.replace(/^\d+\.\s+/, ""), onOpenCitation)}
+              </span>
             </div>
           );
         }
 
-        // Blockquotes
         if (line.startsWith("> ")) {
           return (
             <div
               key={idx}
               className="border-l-2 border-sky-500 pl-3 py-1 my-1.5 italic text-slate-400 bg-sky-950/10 rounded-r"
             >
-              {formatInline(line.replace(/^>\s+/, ""))}
+              {formatInline(line.replace(/^>\s+/, ""), onOpenCitation)}
             </div>
           );
         }
 
-        return <p key={idx}>{formatInline(line)}</p>;
+        return <p key={idx}>{formatInline(line, onOpenCitation)}</p>;
       })}
     </div>
   );
@@ -163,7 +180,6 @@ function CodeBlock({
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden my-3 shadow-lg">
-      {/* Code Header Bar */}
       <div className="flex items-center justify-between px-3.5 py-1.5 bg-slate-900/90 border-b border-slate-800 text-xs">
         <div className="flex items-center gap-2">
           <Terminal className="h-3.5 w-3.5 text-sky-400" />
@@ -195,7 +211,6 @@ function CodeBlock({
         </button>
       </div>
 
-      {/* Code Lines with Line Numbers */}
       <div className="p-3 overflow-x-auto text-xs font-mono bg-slate-950/90 leading-relaxed">
         <table className="w-full border-collapse">
           <tbody>
@@ -216,17 +231,12 @@ function CodeBlock({
   );
 }
 
-/**
- * Lightweight syntax highlight helper for keywords, comments, strings
- */
 function highlightSyntax(codeLine: string, language: string): React.ReactNode {
   if (!codeLine) return " ";
 
-  // Python comments
   if (codeLine.trim().startsWith("#")) {
     return <span className="text-slate-500 italic">{codeLine}</span>;
   }
-  // JS/TS comments
   if (codeLine.trim().startsWith("//")) {
     return <span className="text-slate-500 italic">{codeLine}</span>;
   }
@@ -234,10 +244,10 @@ function highlightSyntax(codeLine: string, language: string): React.ReactNode {
   return <span>{codeLine}</span>;
 }
 
-/**
- * Formats inline bold, code, and citations
- */
-function formatInline(text: string): React.ReactNode[] {
+function formatInline(
+  text: string,
+  onOpenCitation?: (file: string, lines: string) => void
+): React.ReactNode[] {
   const inlineRegex = /(\*\*.*?\*\*|`.*?`|\b(?:[a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+:\d+(?:-\d+)?)\b)/g;
   const elements: React.ReactNode[] = [];
   let lastIdx = 0;
@@ -265,11 +275,15 @@ function formatInline(text: string): React.ReactNode[] {
         </code>
       );
     } else if (token.includes(":") && token.includes(".")) {
-      // Citation pill e.g. "ast_parser.py:42-88"
+      const parts = token.split(":");
+      const file = parts[0];
+      const lines = parts[1] || "1-30";
       elements.push(
         <span
           key={match.index}
-          className="inline-flex items-center gap-1 rounded bg-sky-500/10 px-1.5 py-0.5 font-mono text-[11px] text-sky-400 border border-sky-500/20"
+          onClick={() => onOpenCitation?.(file, lines)}
+          className="inline-flex items-center gap-1 rounded bg-sky-500/10 hover:bg-sky-500/20 px-1.5 py-0.5 font-mono text-[11px] text-sky-400 border border-sky-500/20 cursor-pointer transition-colors"
+          title={`Click to preview citation ${token}`}
         >
           <FileCode className="h-3 w-3" />
           {token}

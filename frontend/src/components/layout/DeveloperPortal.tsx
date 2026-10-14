@@ -11,11 +11,14 @@ import { PRReviewView } from "@/components/views/PRReviewView";
 import { RepoView } from "@/components/views/RepoView";
 import { SettingsView } from "@/components/views/SettingsView";
 import { ConnectRepoModal } from "@/components/modals/ConnectRepoModal";
+import { CitationDrawer } from "@/components/citations/CitationDrawer";
 
 export function DeveloperPortal() {
   const [activeTab, setActiveTab] = useState<NavTabId | "overview">("overview");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const [activeCitation, setActiveCitation] = useState<{ file: string; lines: string } | null>(null);
+
   const [currentRepo, setCurrentRepo] = useState(
     "AnshulKanodia/DevMind-AI-Engineering-Copilot"
   );
@@ -24,6 +27,7 @@ export function DeveloperPortal() {
     "main",
     "dev",
     "feat/phase8-ui-repo-onboarding",
+    "feat/phase8-ui-streaming-chat",
   ]);
   const [repoStats, setRepoStats] = useState({
     files: 142,
@@ -56,6 +60,10 @@ export function DeveloperPortal() {
 
     // After connecting a repo, automatically route to the Code Q&A Copilot tab
     setActiveTab("chat");
+  };
+
+  const handleOpenCitation = (file: string, lines: string) => {
+    setActiveCitation({ file, lines });
   };
 
   return (
@@ -123,6 +131,7 @@ export function DeveloperPortal() {
               <ChatView
                 currentRepo={currentRepo}
                 currentBranch={currentBranch}
+                onOpenCitation={handleOpenCitation}
               />
             )}
             {activeTab === "security" && <SecurityView />}
@@ -147,6 +156,18 @@ export function DeveloperPortal() {
         open={connectModalOpen}
         onOpenChange={setConnectModalOpen}
         onRepoConnected={handleRepoConnected}
+      />
+
+      {/* Code Snippet Citation Drawer */}
+      <CitationDrawer
+        open={!!activeCitation}
+        citation={activeCitation}
+        currentRepo={currentRepo}
+        currentBranch={currentBranch}
+        onClose={() => setActiveCitation(null)}
+        onAskCopilot={(q) => {
+          setActiveTab("chat");
+        }}
       />
     </div>
   );
