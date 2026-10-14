@@ -58,6 +58,7 @@ out/
 .turbo/
 next-env.d.ts
 package-lock.json
+*.tsbuildinfo
 
 # Ephemeral Repositories & Sandbox
 /tmp/
