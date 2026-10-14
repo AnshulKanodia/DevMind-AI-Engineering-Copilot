@@ -292,6 +292,7 @@ export function ChatView({
                 <MarkdownRenderer
                   content={msg.content || (msg.isStreaming ? "Thinking..." : "")}
                   isStreaming={msg.isStreaming}
+                  onOpenCitation={onOpenCitation}
                 />
               ) : (
                 <div className="whitespace-pre-wrap">{msg.content}</div>

@@ -146,11 +146,12 @@ flowchart TD
 │   │   │   └── globals.css           # Tailwind CSS directives & color variables
 │   │   ├── components/
 │   │   │   ├── chat/                 # Streaming chat components (MarkdownRenderer, AgentThoughtTimeline)
+│   │   │   ├── citations/            # AST Citation drawer & line highlight previewer
 │   │   │   ├── layout/               # App layout (DeveloperPortal, Navbar, Sidebar)
 │   │   │   ├── modals/               # Modals (ConnectRepoModal)
 │   │   │   ├── ui/                   # Shadcn UI primitives (button, badge, card, dialog, tabs)
 │   │   │   └── views/                # Portal views (Overview, Chat, Security, Tests, PRReview, Repo, Settings)
-│   │   └── lib/                      # Frontend API client (api.ts, chatStream.ts) & utilities (utils.ts)
+│   │   └── lib/                      # Frontend API client, citation registry & utilities
 │   ├── package.json                  # Next.js & React dependencies
 │   ├── tailwind.config.ts            # Tailwind CSS styling configuration
 │   └── tsconfig.json                 # TypeScript compiler configuration
