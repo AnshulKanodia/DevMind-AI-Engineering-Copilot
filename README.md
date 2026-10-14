@@ -177,7 +177,7 @@ flowchart TD
 | **Phase 5** | **Hybrid Static Analysis (Bandit / ESLint / Semgrep), Bug & Security Agents** | ✅ Complete |
 | **Phase 6** | **Automated Unit Test & Living Architecture Documentation Synthesis** | ✅ Complete |
 | **Phase 7** | **GitHub PR Diff Review & Human-in-the-Loop Auto-Fixing** | ✅ Complete |
-| **Phase 8** | **Interactive Next.js Portal with Citation Previews & Live Monaco Diff** | 🔄 In Progress |
+| **Phase 8** | **Interactive Next.js Portal with Citation Previews & Live Monaco Diff** | ✅ Complete |
 | **Phase 9** | **LangSmith Full-Stack Tracing, Prometheus Metrics & Token Quotas** | ⏳ Planned |
 | **Phase 10** | **RAG Golden Evaluation Suite, Hardening & CI/CD Deployment** | ⏳ Planned |
 
@@ -276,6 +276,12 @@ Run backend test suites:
 ```bash
 cd backend
 pytest -v
+```
+
+Run frontend unit & integration test suites:
+```bash
+cd frontend
+npm test
 ```
 
 Run linting checks:
