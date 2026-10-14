@@ -142,9 +142,14 @@ flowchart TD
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── layout.tsx            # Next.js App Router root layout
-│   │   │   ├── page.tsx              # Developer copilot portal UI
+│   │   │   ├── page.tsx              # Developer copilot portal entry point
 │   │   │   └── globals.css           # Tailwind CSS directives & color variables
-│   │   └── lib/                      # Frontend utilities
+│   │   ├── components/
+│   │   │   ├── layout/               # App layout (DeveloperPortal, Navbar, Sidebar)
+│   │   │   ├── modals/               # Modals (ConnectRepoModal)
+│   │   │   ├── ui/                   # Shadcn UI primitives (button, badge, card, dialog, tabs)
+│   │   │   └── views/                # Portal views (Overview, Chat, Security, Tests, PRReview, Repo, Settings)
+│   │   └── lib/                      # Frontend utilities (cn helper)
 │   ├── package.json                  # Next.js & React dependencies
 │   ├── tailwind.config.ts            # Tailwind CSS styling configuration
 │   └── tsconfig.json                 # TypeScript compiler configuration
@@ -170,7 +175,7 @@ flowchart TD
 | **Phase 5** | **Hybrid Static Analysis (Bandit / ESLint / Semgrep), Bug & Security Agents** | ✅ Complete |
 | **Phase 6** | **Automated Unit Test & Living Architecture Documentation Synthesis** | ✅ Complete |
 | **Phase 7** | **GitHub PR Diff Review & Human-in-the-Loop Auto-Fixing** | ✅ Complete |
-| **Phase 8** | **Interactive Next.js Portal with Citation Previews & Live Monaco Diff** | ⏳ Planned |
+| **Phase 8** | **Interactive Next.js Portal with Citation Previews & Live Monaco Diff** | 🔄 In Progress |
 | **Phase 9** | **LangSmith Full-Stack Tracing, Prometheus Metrics & Token Quotas** | ⏳ Planned |
 | **Phase 10** | **RAG Golden Evaluation Suite, Hardening & CI/CD Deployment** | ⏳ Planned |
 
