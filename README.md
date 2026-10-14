@@ -149,7 +149,7 @@ flowchart TD
 │   │   │   ├── modals/               # Modals (ConnectRepoModal)
 │   │   │   ├── ui/                   # Shadcn UI primitives (button, badge, card, dialog, tabs)
 │   │   │   └── views/                # Portal views (Overview, Chat, Security, Tests, PRReview, Repo, Settings)
-│   │   └── lib/                      # Frontend utilities (cn helper)
+│   │   └── lib/                      # Frontend API client (api.ts) & utilities (utils.ts)
 │   ├── package.json                  # Next.js & React dependencies
 │   ├── tailwind.config.ts            # Tailwind CSS styling configuration
 │   └── tsconfig.json                 # TypeScript compiler configuration

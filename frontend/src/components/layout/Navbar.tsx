@@ -5,10 +5,10 @@ import {
   Cpu, 
   GitBranch, 
   FolderGit2, 
-  ExternalLink, 
   Github, 
   CheckCircle2, 
-  Layers
+  Layers,
+  Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,7 @@ import { Dropdown } from "@/components/ui/dropdown";
 export interface NavbarProps {
   currentRepo: string;
   currentBranch: string;
+  availableBranches?: string[];
   onBranchChange: (branch: string) => void;
   onConnectRepoClick: () => void;
 }
@@ -24,14 +25,15 @@ export interface NavbarProps {
 export function Navbar({
   currentRepo,
   currentBranch,
+  availableBranches = ["main", "dev", "feat/phase8-ui-repo-onboarding"],
   onBranchChange,
   onConnectRepoClick,
 }: NavbarProps) {
-  const branches = [
-    { value: "main", label: "main" },
-    { value: "feat/phase8-ui-scaffold", label: "feat/phase8-ui-scaffold" },
-    { value: "dev", label: "dev" },
-  ];
+  const branchOptions = availableBranches.map((b) => ({
+    value: b,
+    label: b,
+    icon: <GitBranch className="h-3 w-3 text-sky-400" />,
+  }));
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md">
@@ -51,18 +53,22 @@ export function Navbar({
           </div>
 
           <div className="hidden md:flex items-center gap-2 pl-4 border-l border-slate-800 text-xs">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-300">
+            <button
+              onClick={onConnectRepoClick}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-900 border border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white transition-colors"
+              title="Change repository"
+            >
               <FolderGit2 className="h-3.5 w-3.5 text-sky-400" />
-              <span className="font-mono text-[11px] truncate max-w-[220px]">
+              <span className="font-mono text-[11px] truncate max-w-[200px]">
                 {currentRepo}
               </span>
-            </div>
+            </button>
 
             <Dropdown
-              options={branches}
+              options={branchOptions}
               value={currentBranch}
               onChange={onBranchChange}
-              className="w-44"
+              className="w-48"
               placeholder="Select branch"
             />
           </div>
@@ -77,11 +83,11 @@ export function Navbar({
 
           <Button
             size="sm"
-            variant="outline"
+            variant="glow"
             onClick={onConnectRepoClick}
             className="text-xs flex items-center gap-1.5"
           >
-            <Layers className="h-3.5 w-3.5 text-sky-400" />
+            <Layers className="h-3.5 w-3.5" />
             <span>Connect Repo</span>
           </Button>
 

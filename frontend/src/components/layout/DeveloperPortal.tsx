@@ -20,15 +20,42 @@ export function DeveloperPortal() {
     "AnshulKanodia/DevMind-AI-Engineering-Copilot"
   );
   const [currentBranch, setCurrentBranch] = useState("main");
+  const [availableBranches, setAvailableBranches] = useState<string[]>([
+    "main",
+    "dev",
+    "feat/phase8-ui-repo-onboarding",
+  ]);
+  const [repoStats, setRepoStats] = useState({
+    files: 142,
+    chunks: 684,
+  });
 
-  const handleRepoConnected = (repoUrl: string, branch: string) => {
+  const handleRepoConnected = (
+    repoUrl: string,
+    branch: string,
+    stats?: { files: number; chunks: number }
+  ) => {
     try {
       const parsed = new URL(repoUrl).pathname.replace(/^\//, "");
       if (parsed) setCurrentRepo(parsed);
     } catch {
       setCurrentRepo(repoUrl);
     }
+
     setCurrentBranch(branch);
+    if (!availableBranches.includes(branch)) {
+      setAvailableBranches((prev) => [...prev, branch]);
+    }
+
+    if (stats) {
+      setRepoStats({
+        files: stats.files,
+        chunks: stats.chunks,
+      });
+    }
+
+    // After connecting a repo, automatically route to the Code Q&A Copilot tab
+    setActiveTab("chat");
   };
 
   return (
@@ -37,6 +64,7 @@ export function DeveloperPortal() {
       <Navbar
         currentRepo={currentRepo}
         currentBranch={currentBranch}
+        availableBranches={availableBranches}
         onBranchChange={setCurrentBranch}
         onConnectRepoClick={() => setConnectModalOpen(true)}
       />
@@ -95,13 +123,21 @@ export function DeveloperPortal() {
             {activeTab === "security" && <SecurityView />}
             {activeTab === "tests" && <TestsView />}
             {activeTab === "pr_review" && <PRReviewView />}
-            {activeTab === "repo" && <RepoView />}
+            {activeTab === "repo" && (
+              <RepoView
+                currentRepo={currentRepo}
+                currentBranch={currentBranch}
+                filesCount={repoStats.files}
+                chunksCount={repoStats.chunks}
+                onOpenConnectModal={() => setConnectModalOpen(true)}
+              />
+            )}
             {activeTab === "settings" && <SettingsView />}
           </div>
         </main>
       </div>
 
-      {/* Modal */}
+      {/* Repository Onboarding Modal */}
       <ConnectRepoModal
         open={connectModalOpen}
         onOpenChange={setConnectModalOpen}
