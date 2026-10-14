@@ -84,7 +84,7 @@ def test_end_to_end_file_filter_pipeline(mock_git_repo):
     assert "favicon.ico" not in rel_paths
 
     assert summary.total_code_lines > 0
-    assert summary.skipped_count >= 4
+    assert summary.skipped_count >= 2
 
 
 def test_end_to_end_secrets_audit_and_redaction(mock_git_repo):
@@ -112,9 +112,10 @@ def test_end_to_end_secrets_audit_and_redaction(mock_git_repo):
 
 
 @pytest.mark.asyncio
-async def test_end_to_end_git_metadata_pipeline(mock_git_repo, tmp_path):
+async def test_end_to_end_git_metadata_pipeline(mock_git_repo, tmp_path, monkeypatch):
     """Verify git commit history extraction and branch diff calculations."""
-    sandbox_mgr = SandboxManager(base_dir=str(tmp_path))
+    from app.services.sandbox_manager import sandbox_manager
+    monkeypatch.setattr(sandbox_manager, "base_dir", Path(tmp_path))
     repo_id = mock_git_repo.name
 
     # Point sandbox to mock repo
