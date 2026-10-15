@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Any, Callable, Dict, List, Optional
 
 import re
@@ -15,6 +16,7 @@ from app.services.qa_agent import qa_agent_service
 from app.services.router_agent import router_agent_service
 from app.services.security_agent import security_agent_service
 from app.services.test_agent import test_agent_service
+from app.core.metrics import metrics_manager
 from app.core.telemetry import trace_agent_node, trace_span
 
 logger = logging.getLogger("devmind.agents.graph")
@@ -282,13 +284,20 @@ class WorkflowGraph:
             # Step 1: Router node
             if "router_node" in self.nodes:
                 with trace_agent_node("router_node", repo_id=repo_id, step=state.get("current_step")):
+                    t0 = time.perf_counter()
                     state = await self.nodes["router_node"](state)
+                    metrics_manager.record_agent_node("router_node", "success", time.perf_counter() - t0)
+
+            if state.get("intent"):
+                metrics_manager.record_agent_intent(state["intent"])
 
             # Step 2: Route conditionally to specialized subagent
             target_node = self.route_intent(state)
             if target_node in self.nodes:
                 with trace_agent_node(target_node, repo_id=repo_id, intent=state.get("intent")):
+                    t1 = time.perf_counter()
                     state = await self.nodes[target_node](state)
+                    metrics_manager.record_agent_node(target_node, "success", time.perf_counter() - t1)
 
             # Conditional Interrupt Gate: if node requested human approval, pause workflow execution cleanly
             if state.get("interrupted"):
@@ -297,8 +306,11 @@ class WorkflowGraph:
             # Step 3: Formatting & Citation node
             if "format_node" in self.nodes:
                 with trace_agent_node("format_node", repo_id=repo_id, intent=state.get("intent")):
+                    t2 = time.perf_counter()
                     state = await self.nodes["format_node"](state)
+                    metrics_manager.record_agent_node("format_node", "success", time.perf_counter() - t2)
 
+            metrics_manager.record_citations(state.get("citations", []))
             state["current_step"] = "completed"
             return state
 
