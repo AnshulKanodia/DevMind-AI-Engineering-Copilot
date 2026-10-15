@@ -15,6 +15,7 @@ from app.services.qa_agent import qa_agent_service
 from app.services.router_agent import router_agent_service
 from app.services.security_agent import security_agent_service
 from app.services.test_agent import test_agent_service
+from app.core.telemetry import trace_agent_node, trace_span
 
 logger = logging.getLogger("devmind.agents.graph")
 
@@ -267,26 +268,39 @@ class WorkflowGraph:
     async def execute(self, initial_state: AgentState) -> AgentState:
         """Run workflow from router through specialized subagent to output formatting."""
         state = initial_state
+        repo_id = state.get("repo_id", "")
+        query = state.get("user_query", "")
 
-        # Step 1: Router node
-        if "router_node" in self.nodes:
-            state = await self.nodes["router_node"](state)
+        with trace_span(
+            "devmind.agent.workflow",
+            attributes={
+                "devmind.repo_id": repo_id,
+                "devmind.query": query[:128],
+                "devmind.component": "orchestrator",
+            },
+        ):
+            # Step 1: Router node
+            if "router_node" in self.nodes:
+                with trace_agent_node("router_node", repo_id=repo_id, step=state.get("current_step")):
+                    state = await self.nodes["router_node"](state)
 
-        # Step 2: Route conditionally to specialized subagent
-        target_node = self.route_intent(state)
-        if target_node in self.nodes:
-            state = await self.nodes[target_node](state)
+            # Step 2: Route conditionally to specialized subagent
+            target_node = self.route_intent(state)
+            if target_node in self.nodes:
+                with trace_agent_node(target_node, repo_id=repo_id, intent=state.get("intent")):
+                    state = await self.nodes[target_node](state)
 
-        # Conditional Interrupt Gate: if node requested human approval, pause workflow execution cleanly
-        if state.get("interrupted"):
+            # Conditional Interrupt Gate: if node requested human approval, pause workflow execution cleanly
+            if state.get("interrupted"):
+                return state
+
+            # Step 3: Formatting & Citation node
+            if "format_node" in self.nodes:
+                with trace_agent_node("format_node", repo_id=repo_id, intent=state.get("intent")):
+                    state = await self.nodes["format_node"](state)
+
+            state["current_step"] = "completed"
             return state
-
-        # Step 3: Formatting & Citation node
-        if "format_node" in self.nodes:
-            state = await self.nodes["format_node"](state)
-
-        state["current_step"] = "completed"
-        return state
 
 
 def build_devmind_graph() -> WorkflowGraph:
