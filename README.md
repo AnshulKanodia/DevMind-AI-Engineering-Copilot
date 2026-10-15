@@ -178,7 +178,7 @@ flowchart TD
 | **Phase 6** | **Automated Unit Test & Living Architecture Documentation Synthesis** | ✅ Complete |
 | **Phase 7** | **GitHub PR Diff Review & Human-in-the-Loop Auto-Fixing** | ✅ Complete |
 | **Phase 8** | **Interactive Next.js Portal with Citation Previews & Live Monaco Diff** | ✅ Complete |
-| **Phase 9** | **LangSmith Full-Stack Tracing, Prometheus Metrics & Token Quotas** | ⏳ Planned |
+| **Phase 9** | **LangSmith Full-Stack Tracing, Prometheus Metrics & Token Quotas** | ✅ Complete |
 | **Phase 10** | **RAG Golden Evaluation Suite, Hardening & CI/CD Deployment** | ⏳ Planned |
 
 ---
@@ -267,6 +267,11 @@ DevMind Web UI will be accessible at:
 * `GET /api/v1/approvals/{checkpoint_id}`: Retrieves detailed checkpoint metadata and proposed unified patch diffs.
 * `POST /api/v1/approvals/{checkpoint_id}/decision`: Processes developer approval or rejection, issuing HMAC-signed cryptographic tokens upon approval.
 * `POST /api/v1/approvals/{checkpoint_id}/apply-autofix`: Verifies the human approval token, creates a dedicated Git branch (`devmind/autofix-<id>`), and opens a Draft PR on GitHub.
+
+### Observability, Prometheus Metrics & Token Guardrails
+* `GET /metrics`: Prometheus standard exposition endpoint scraping HTTP latencies, agent node durations, classified intents, and LLM token counters.
+* `GET /api/v1/guardrails/usage/{repo_id}`: Inspects real-time prompt/completion token consumption, dollar spend, remaining quota, and graceful degradation status.
+* `POST /api/v1/guardrails/reset/{repo_id}`: Resets token budget accounting and spending for a repository.
 
 ---
 
