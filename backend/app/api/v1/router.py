@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import agents, approvals, auth, git_ops, repos, scans
+from app.api.v1.endpoints import agents, approvals, auth, git_ops, guardrails, repos, scans
 
 api_router = APIRouter()
 
@@ -20,6 +20,9 @@ api_router.include_router(scans.router, prefix="/scans", tags=["SAST & Security 
 
 # Register Human-in-the-Loop Checkpoint & Approval endpoints
 api_router.include_router(approvals.router, prefix="/approvals", tags=["Human Approvals"])
+
+# Register Token Guardrails & Usage Accounting endpoints
+api_router.include_router(guardrails.router, prefix="/guardrails", tags=["Guardrails & Token Usage"])
 
 
 @api_router.get("/status", tags=["Status"])

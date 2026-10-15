@@ -1,11 +1,14 @@
 import time
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from opentelemetry.trace import SpanKind
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.core.guardrails import token_guardrail
 from app.core.metrics import CONTENT_TYPE_LATEST, metrics_manager
+from app.core.rate_limiter import rate_limiter
 from app.core.telemetry import (
     setup_langsmith,
     telemetry_manager,
@@ -25,9 +28,30 @@ app = FastAPI(
     redoc_url="/redoc" if settings.DEBUG else None,
 )
 
-# OpenTelemetry Distributed Tracing & Prometheus HTTP Middleware
+EXEMPT_RATE_LIMIT_PATHS = {"/health", "/metrics", "/docs", "/redoc", "/openapi.json"}
+
+# OpenTelemetry Distributed Tracing, Metrics & Rate Limiting HTTP Middleware
 @app.middleware("http")
 async def telemetry_middleware(request: Request, call_next):
+    # Enforce rate limiting on non-exempt endpoints
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    client_key = request.headers.get("x-forwarded-for", client_ip).split(",")[0].strip()
+
+    if request.url.path not in EXEMPT_RATE_LIMIT_PATHS:
+        allowed, remaining, retry_after = rate_limiter.is_allowed(client_key)
+        if not allowed:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded. Please retry after some time."},
+                headers={
+                    "Retry-After": str(int(retry_after)),
+                    "X-RateLimit-Limit": str(rate_limiter.default_limit),
+                    "X-RateLimit-Remaining": "0",
+                },
+            )
+    else:
+        remaining = rate_limiter.default_limit
+
     trace_id = request.headers.get("x-trace-id")
     start_time = time.perf_counter()
     with trace_span(
@@ -51,6 +75,8 @@ async def telemetry_middleware(request: Request, call_next):
         ctx = span.get_span_context() if hasattr(span, "get_span_context") else None
         if ctx and ctx.trace_id:
             response.headers["X-Trace-ID"] = format(ctx.trace_id, "032x")
+        response.headers["X-RateLimit-Limit"] = str(rate_limiter.default_limit)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
         return response
 
 # Cross-Origin Resource Sharing (CORS) Configuration
