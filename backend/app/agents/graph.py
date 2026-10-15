@@ -16,6 +16,7 @@ from app.services.qa_agent import qa_agent_service
 from app.services.router_agent import router_agent_service
 from app.services.security_agent import security_agent_service
 from app.services.test_agent import test_agent_service
+from app.core.guardrails import token_guardrail
 from app.core.metrics import metrics_manager
 from app.core.telemetry import trace_agent_node, trace_span
 
@@ -273,6 +274,14 @@ class WorkflowGraph:
         repo_id = state.get("repo_id", "")
         query = state.get("user_query", "")
 
+        # Token Budget Guardrail Pre-Check
+        if repo_id:
+            allowance = token_guardrail.check_allowance(repo_id, estimated_tokens=1500)
+            if allowance.get("degradation_active"):
+                if "metadata" not in state or not state["metadata"]:
+                    state["metadata"] = {}
+                state["metadata"]["degradation_active"] = True
+
         with trace_span(
             "devmind.agent.workflow",
             attributes={
@@ -311,6 +320,20 @@ class WorkflowGraph:
                     metrics_manager.record_agent_node("format_node", "success", time.perf_counter() - t2)
 
             metrics_manager.record_citations(state.get("citations", []))
+
+            # Record token usage & cost in TokenGuardrail
+            if repo_id:
+                prompt_tokens = max(10, len(query.split()) * 2)
+                resp_text = state.get("final_response") or ""
+                completion_tokens = max(10, len(resp_text.split()) * 2)
+                token_guardrail.record_consumption(
+                    repo_id=repo_id,
+                    model="gpt-4o",
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                )
+                metrics_manager.record_llm_tokens("gpt-4o", prompt_tokens, completion_tokens)
+
             state["current_step"] = "completed"
             return state
 
