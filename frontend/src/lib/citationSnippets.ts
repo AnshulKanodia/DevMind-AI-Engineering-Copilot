@@ -207,6 +207,170 @@ export const KNOWN_CITATIONS: Record<string, Partial<CitationData>> = {
         inline_comments=self._generate_inline_comments(hunks),
     )`,
   },
+  ".env.example": {
+    file: ".env.example",
+    language: "bash",
+    nodeType: "ConfigFile",
+    symbolName: "EnvironmentVariables",
+    denseScore: 0.982,
+    bm25Score: 19.5,
+    combinedScore: 0.965,
+    code: `# MongoDB Atlas Connection URI
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/personal_finance?retryWrites=true&w=majority
+
+# Security: PIN code for single-user authentication (6 digits)
+APP_PIN=123456
+
+# Secret key for encrypting/signing session cookies
+SESSION_SECRET=personal-finance-secret-key-32-chars-minimum-token
+
+# Vault Owner Display Name / Username (Optional, defaults to "Vault Owner")
+NEXT_PUBLIC_USER_NAME="Vault Owner"`,
+  },
+  "lib/mongodb.ts": {
+    file: "lib/mongodb.ts",
+    language: "typescript",
+    nodeType: "DatabaseConnector",
+    symbolName: "connectToDatabase",
+    denseScore: 0.975,
+    bm25Score: 18.4,
+    combinedScore: 0.948,
+    code: `import mongoose from "mongoose";
+
+const MONGODB_URI = process.env.MONGODB_URI;
+
+interface MongooseCache {
+  conn: typeof mongoose | null;
+  promise: Promise<typeof mongoose> | null;
+}
+
+let cached: MongooseCache = (global as any).mongoose;
+if (!cached) {
+  cached = (global as any).mongoose = { conn: null, promise: null };
+}
+
+export async function connectToDatabase() {
+  if (!MONGODB_URI) {
+    throw new Error("Please define the MONGODB_URI environment variable inside .env.local");
+  }
+  if (cached.conn) return cached.conn;
+
+  if (!cached.promise) {
+    cached.promise = mongoose.connect(MONGODB_URI, { bufferCommands: false });
+  }
+  cached.conn = await cached.promise;
+  return cached.conn;
+}`,
+  },
+  "lib/auth.ts": {
+    file: "lib/auth.ts",
+    language: "typescript",
+    nodeType: "SecurityService",
+    symbolName: "createSessionToken",
+    denseScore: 0.968,
+    bm25Score: 17.9,
+    combinedScore: 0.942,
+    code: `import { SignJWT, jwtVerify } from "jose";
+import { cookies } from "next/headers";
+
+export const COOKIE_NAME = "finance_auth_token";
+const DEFAULT_SECRET = "rupeepulse-super-secure-finance-vault-secret-key-32";
+const SECRET_KEY = new TextEncoder().encode(process.env.SESSION_SECRET || DEFAULT_SECRET);
+
+export async function createSessionToken(): Promise<string> {
+  const token = await new SignJWT({ authenticated: true, role: "owner" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("30d") // 30 days session
+    .sign(SECRET_KEY);
+  return token;
+}
+
+export async function verifySessionToken(token: string) {
+  try {
+    const { payload } = await jwtVerify(token, SECRET_KEY);
+    return payload;
+  } catch {
+    return null;
+  }
+}`,
+  },
+  "models/Transaction.ts": {
+    file: "models/Transaction.ts",
+    language: "typescript",
+    nodeType: "MongooseSchema",
+    symbolName: "TransactionSchema",
+    denseScore: 0.958,
+    bm25Score: 16.8,
+    combinedScore: 0.931,
+    code: `import mongoose, { Schema, Document } from "mongoose";
+
+export interface ITransaction extends Document {
+  type: "income" | "expense" | "transfer";
+  amount: number;
+  category: string;
+  paymentMethod: "cash" | "upi" | "card" | "bank";
+  date: Date;
+  note?: string;
+  tags?: string[];
+  createdAt: Date;
+}
+
+const TransactionSchema = new Schema<ITransaction>({
+  type: { type: String, enum: ["income", "expense", "transfer"], required: true },
+  amount: { type: Number, required: true },
+  category: { type: String, required: true },
+  paymentMethod: { type: String, enum: ["cash", "upi", "card", "bank"], default: "upi" },
+  date: { type: Date, default: Date.now },
+  note: { type: String },
+  tags: [{ type: String }],
+}, { timestamps: true });
+
+export default mongoose.models.Transaction || mongoose.model<ITransaction>("Transaction", TransactionSchema);`,
+  },
+  "lib/debtSimplifier.ts": {
+    file: "lib/debtSimplifier.ts",
+    language: "typescript",
+    nodeType: "Algorithm",
+    symbolName: "simplifyDebts",
+    denseScore: 0.962,
+    bm25Score: 17.1,
+    combinedScore: 0.935,
+    code: `export interface DebtTransfer {
+  from: string;
+  to: string;
+  amount: number;
+}
+
+/**
+ * Greedily settles circular debts using minimum net transfer graph reduction.
+ */
+export function simplifyDebts(netBalances: Record<string, number>): DebtTransfer[] {
+  const debtors: { person: string; amount: number }[] = [];
+  const creditors: { person: string; amount: number }[] = [];
+
+  for (const [person, balance] of Object.entries(netBalances)) {
+    if (balance < -0.01) debtors.push({ person, amount: -balance });
+    else if (balance > 0.01) creditors.push({ person, amount: balance });
+  }
+
+  const transfers: DebtTransfer[] = [];
+  let d = 0, c = 0;
+
+  while (d < debtors.length && c < creditors.length) {
+    const settleAmount = Math.min(debtors[d].amount, creditors[c].amount);
+    transfers.push({ from: debtors[d].person, to: creditors[c].person, amount: Math.round(settleAmount * 100) / 100 });
+
+    debtors[d].amount -= settleAmount;
+    creditors[c].amount -= settleAmount;
+
+    if (debtors[d].amount < 0.01) d++;
+    if (creditors[c].amount < 0.01) c++;
+  }
+
+  return transfers;
+}`,
+  },
 };
 
 /**

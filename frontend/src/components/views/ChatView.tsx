@@ -26,6 +26,7 @@ import {
   streamAgentChat,
   AgentThought,
 } from "@/lib/chatStream";
+import { isPersonalFinanceRepo } from "@/lib/repoKnowledge";
 
 export interface ChatMessage {
   id: string;
@@ -42,6 +43,31 @@ export interface ChatViewProps {
   onOpenCitation?: (file: string, lines: string) => void;
 }
 
+function getInitialWelcomeMessage(repo: string): ChatMessage {
+  if (isPersonalFinanceRepo(repo)) {
+    return {
+      id: "msg-welcome",
+      role: "assistant",
+      content: `### Welcome to DevMind Copilot 👋\n\nI am your **AI Engineering Copilot**, grounded directly on the AST syntax trees of **RupeePulse (${repo})**.\n\nAsk me about required environment variables, MongoDB schemas, 6-digit PIN vault security, or the debt simplification engine. Every answer is strictly grounded with verified code citations!`,
+      citations: [
+        { file: ".env.example", lines: "1-11", type: "config" },
+        { file: "lib/mongodb.ts", lines: "13-25", type: "database" },
+        { file: "lib/auth.ts", lines: "6-18", type: "security" },
+      ],
+    };
+  }
+
+  return {
+    id: "msg-welcome",
+    role: "assistant",
+    content: `### Welcome to DevMind Copilot 👋\n\nI am your **AI Engineering Copilot**, grounded directly on the AST syntax trees of **${repo}**.\n\nAsk me architectural questions, request unit test generation with mocks, perform security audits, or inspect pull requests. Every answer is strictly grounded with verified code citations!`,
+    citations: [
+      { file: "backend/app/services/ast_parser.py", lines: "42-88", type: "class" },
+      { file: "backend/app/agents/graph.py", lines: "115-160", type: "router" },
+    ],
+  };
+}
+
 export function ChatView({
   currentRepo = "AnshulKanodia/DevMind-AI-Engineering-Copilot",
   currentBranch = "main",
@@ -54,39 +80,66 @@ export function ChatView({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "msg-welcome",
-      role: "assistant",
-      content: `### Welcome to DevMind Copilot 👋\n\nI am your **AI Engineering Copilot**, grounded directly on the AST syntax trees of **${currentRepo}**.\n\nAsk me architectural questions, request unit test generation with mocks, perform security audits, or inspect pull requests. Every answer is strictly grounded with verified code citations!`,
-      citations: [
-        { file: "backend/app/services/ast_parser.py", lines: "42-88", type: "class" },
-        { file: "backend/app/agents/graph.py", lines: "115-160", type: "router" },
-      ],
-    },
+    getInitialWelcomeMessage(currentRepo),
   ]);
 
-  const promptCategories = [
-    {
-      category: "Architecture",
-      icon: Search,
-      prompt: "How does the hybrid BM25 + dense vector search work?",
-    },
-    {
-      category: "Security",
-      icon: ShieldAlert,
-      prompt: "Check this codebase for OWASP vulnerabilities and credential leaks.",
-    },
-    {
-      category: "Test Gen",
-      icon: FileCode2,
-      prompt: "Generate an isolated pytest test fixture for hybrid retriever.",
-    },
-    {
-      category: "PR Review",
-      icon: GitPullRequestDraft,
-      prompt: "How do cryptographic Human-in-the-Loop approval tokens work?",
-    },
-  ];
+  useEffect(() => {
+    // When connected repo changes, reset greeting if only welcome message is present
+    setMessages((prev) => {
+      if (prev.length <= 1) {
+        return [getInitialWelcomeMessage(currentRepo)];
+      }
+      return prev;
+    });
+  }, [currentRepo]);
+
+  const isFinance = isPersonalFinanceRepo(currentRepo);
+
+  const promptCategories = isFinance
+    ? [
+        {
+          category: "Environment",
+          icon: Search,
+          prompt: "What environment variables do I need to configure?",
+        },
+        {
+          category: "Database",
+          icon: FileCode2,
+          prompt: "How does the MongoDB connection and Transaction model work?",
+        },
+        {
+          category: "Vault Auth",
+          icon: ShieldAlert,
+          prompt: "How is the 6-digit PIN and JWT vault security implemented?",
+        },
+        {
+          category: "Debt Split",
+          icon: GitPullRequestDraft,
+          prompt: "How does the bilateral friend ledger debt simplifier work?",
+        },
+      ]
+    : [
+        {
+          category: "Architecture",
+          icon: Search,
+          prompt: "How does the hybrid BM25 + dense vector search work?",
+        },
+        {
+          category: "Security",
+          icon: ShieldAlert,
+          prompt: "Check this codebase for OWASP vulnerabilities and credential leaks.",
+        },
+        {
+          category: "Test Gen",
+          icon: FileCode2,
+          prompt: "Generate an isolated pytest test fixture for hybrid retriever.",
+        },
+        {
+          category: "PR Review",
+          icon: GitPullRequestDraft,
+          prompt: "How do cryptographic Human-in-the-Loop approval tokens work?",
+        },
+      ];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
