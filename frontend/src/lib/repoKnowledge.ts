@@ -148,6 +148,25 @@ function generateDynamicRepoResponse(
   const { owner, repo, envExample, envPath, packageJson, readme } = context;
   const repoName = `${owner}/${repo}`;
 
+  const isGreeting =
+    /^(hi|hey|hello|greetings|good\s+(morning|afternoon|evening)|yo|sup|who\s+are\s+you|help)\b/i.test(
+      query.trim().replace(/[?!.,]+$/, "")
+    );
+
+  if (isGreeting) {
+    return {
+      intent: "general_greeting",
+      confidence: 0.99,
+      routerMessage: `Classified as conversational greeting. Initialized interactive Copilot session for ${repoName}.`,
+      retrieverMessage: `Active repository: ${repoName} (${context.packageJson?.name || repo}).`,
+      synthesizerMessage: `Generated conversational greeting with suggested exploration prompts.`,
+      markdownResponse: `👋 **Hello!** I am your **DevMind AI Engineering Copilot**, connected to **\`${repoName}\`**.\n\nI can help you explore, debug, and understand this codebase. Here are a few things you can ask me:\n\n- 🔑 **Environment Setup**: *"What environment variables do I need to run this project?"*\n- 🗄️ **Database & Models**: *"What database or data schemas are used here?"*\n- 🔐 **Security & Auth**: *"How are authentication and sessions implemented?"*\n- 🛠️ **Architecture & Stack**: *"Explain the project architecture and main dependencies."*\n- 🧪 **Testing**: *"How are tests structured in this project?"*\n\nWhat would you like to explore in **${repo}**?`,
+      citations: [
+        ...(readme ? [{ file: "README.md", lines: "1-20", type: "docs" }] : []),
+      ],
+    };
+  }
+
   const isDatabase =
     /\b(database|db|mongo|mongodb|mongoose|sql|postgres|mysql|prisma|models?|schemas?|orm)\b/i.test(query);
 
@@ -315,6 +334,25 @@ function parseEnvFile(content: string): Array<{ key: string; defaultValue?: stri
  * Handles queries targeting DevMind AI Engineering Copilot itself.
  */
 function resolveDevMindInternalQuery(query: string, lowerQ: string): RepoQueryResult {
+  const isGreeting =
+    /^(hi|hey|hello|greetings|good\s+(morning|afternoon|evening)|yo|sup|who\s+are\s+you|help)\b/i.test(
+      query.trim().replace(/[?!.,]+$/, "")
+    );
+
+  if (isGreeting) {
+    return {
+      intent: "general_greeting",
+      confidence: 0.99,
+      routerMessage: "Classified as conversational greeting.",
+      retrieverMessage: "Initialized DevMind Copilot session.",
+      synthesizerMessage: "Generated conversational greeting.",
+      markdownResponse: `👋 **Hello!** I am your **DevMind AI Engineering Copilot**.\n\nI am connected to the DevMind core repository. You can ask me about our LangGraph agent workflows, hybrid BM25 + dense retrieval, AST chunking, or security audits. How can I help you today?`,
+      citations: [
+        { file: "backend/app/services/ast_parser.py", lines: "42-88", type: "class" },
+      ],
+    };
+  }
+
   return {
     intent: "code_qa",
     confidence: 0.965,

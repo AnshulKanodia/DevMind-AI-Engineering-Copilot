@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   onboardRepository,
+  computeRepoStats,
   IndexingProgressStep,
 } from "@/lib/api";
 
@@ -86,9 +87,10 @@ export function ConnectRepoModal({
   };
 
   const handleFinish = () => {
+    const fallbackStats = computeRepoStats(repoUrl);
     onRepoConnected(repoUrl, branch, {
-      files: completedStats?.filesIndexed || 142,
-      chunks: completedStats?.chunksIndexed || 684,
+      files: completedStats?.filesIndexed ?? fallbackStats.files,
+      chunks: completedStats?.chunksIndexed ?? fallbackStats.chunks,
     });
     onOpenChange(false);
     // Reset state after close

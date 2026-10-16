@@ -128,3 +128,28 @@ test("ChatStream - dynamically discovers database packages for connected repo", 
   );
 });
 
+test("ChatStream - responds conversationally to greetings rather than dumping architecture", async () => {
+  let fullText = "";
+
+  await streamAgentChat(
+    "hey",
+    "AnshulKanodia/Personal-Finance-Management",
+    {
+      onToken: (tok) => {
+        fullText += tok;
+      },
+      onThought: () => {},
+      onCitations: () => {},
+      onDone: () => {},
+      onError: () => {},
+    }
+  );
+
+  assert.ok(fullText.includes("Hello!"), "Response should greet the user politely");
+  assert.ok(
+    !fullText.includes("### 💡 Grounded Repository Analysis"),
+    "Greeting should not dump full architecture overview"
+  );
+});
+
+
