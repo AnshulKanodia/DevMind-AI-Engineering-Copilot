@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: devmind-config
+  namespace: devmind
+  labels:
+    app.kubernetes.io/name: devmind
+    app.kubernetes.io/part-of: devmind-engineering-copilot
+data:
+  PROJECT_NAME: "DevMind"
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  DEBUG: "false"
+  BACKEND_INTERNAL_URL: "http://devmind-backend.devmind.svc.cluster.local:8000"
+  NEXT_PUBLIC_APP_URL: "https://devmind.example.com"
+  MAX_REPO_SIZE_MB: "500"
+  CLONE_TIMEOUT_SECONDS: "120"
