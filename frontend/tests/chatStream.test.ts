@@ -152,4 +152,111 @@ test("ChatStream - responds conversationally to greetings rather than dumping ar
   );
 });
 
+test("ChatStream - resolves complete, non-empty setup instructions for Personal-Finance-Management", async () => {
+  let fullText = "";
+  let citationsList: Array<{ file: string; lines: string; type: string }> = [];
+
+  await streamAgentChat(
+    "how do i run",
+    "https://github.com/AnshulKanodia/Personal-Finance-Management",
+    {
+      onToken: (tok) => {
+        fullText += tok;
+      },
+      onThought: () => {},
+      onCitations: (c) => {
+        citationsList = c;
+      },
+      onDone: () => {},
+      onError: () => {},
+    }
+  );
+
+  assert.ok(fullText.length > 200, "Setup output must contain substantive instructions, not blank lines");
+  assert.ok(fullText.includes("Setup & Execution Guide"), "Header must declare setup guide");
+  assert.ok(
+    fullText.includes("git clone") || fullText.includes("npm run dev") || fullText.includes("npm install"),
+    "Setup output must contain concrete commands"
+  );
+  assert.ok(citationsList.some((c) => c.file === "README.md"), "Must cite README.md");
+});
+
+test("ChatStream - returns clean overview without raw shields.io badge links", async () => {
+  let fullText = "";
+
+  await streamAgentChat(
+    "what is this about ?",
+    "AnshulKanodia/Personal-Finance-Management",
+    {
+      onToken: (tok) => {
+        fullText += tok;
+      },
+      onThought: () => {},
+      onCitations: () => {},
+      onDone: () => {},
+      onError: () => {},
+    }
+  );
+
+  assert.ok(fullText.includes("About RupeePulse"), "Header should state project title");
+  assert.ok(fullText.includes("RupeePulse") && fullText.includes("personal finance management"), "Overview must contain genuine descriptive prose");
+  assert.ok(!fullText.includes("[![Next.js]"), "Must NOT render raw unparsed markdown badge links");
+  assert.ok(!fullText.includes("img.shields.io"), "Must NOT dump shields.io image links in overview prose");
+});
+
+test("ChatStream - identifies live hosting URL and platform for Anshul-Kanodia-Portfolio", async () => {
+  let fullText = "";
+  let citationsList: Array<{ file: string; lines: string; type: string }> = [];
+
+  await streamAgentChat(
+    "where it is hosted ?",
+    "https://github.com/AnshulKanodia/Anshul-Kanodia-Portfolio",
+    {
+      onToken: (tok) => {
+        fullText += tok;
+      },
+      onThought: () => {},
+      onCitations: (c) => {
+        citationsList = c;
+      },
+      onDone: () => {},
+      onError: () => {},
+    }
+  );
+
+  assert.ok(fullText.includes("anshulkanodia.me"), "Response must identify the live domain anshulkanodia.me");
+  assert.ok(fullText.includes("Vercel"), "Response must identify Vercel hosting platform");
+  assert.ok(citationsList.some((c) => c.file === "README.md"), "Must cite README.md");
+});
+
+test("ChatStream - provides dual aesthetic overview and launch guide for 'run it and show how it look'", async () => {
+  let fullText = "";
+  let citationsList: Array<{ file: string; lines: string; type: string }> = [];
+
+  await streamAgentChat(
+    "run it and show how it look",
+    "https://github.com/AnshulKanodia/Anshul-Kanodia-Portfolio",
+    {
+      onToken: (tok) => {
+        fullText += tok;
+      },
+      onThought: () => {},
+      onCitations: (c) => {
+        citationsList = c;
+      },
+      onDone: () => {},
+      onError: () => {},
+    }
+  );
+
+  assert.ok(fullText.length > 200, "Must provide substantial response");
+  assert.ok(fullText.includes("Visual Design") || fullText.includes("UI"), "Must explain UI aesthetics");
+  assert.ok(
+    fullText.includes("How to Run") || fullText.includes("Setup") || fullText.includes("Local"),
+    "Must explain how to run"
+  );
+  assert.ok(citationsList.some((c) => c.file === "README.md"), "Must cite README.md");
+});
+
+
 

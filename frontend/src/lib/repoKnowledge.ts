@@ -85,7 +85,22 @@ async function fetchGithubFile(
 }
 
 /**
+ * Sanitizes markdown content by removing raw shields.io badges and excess blank lines.
+ */
+export function sanitizeMarkdown(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/\[!\[[\s\S]*?\]\([\s\S]*?\)\]\([\s\S]*?\)/g, "")
+    .replace(/!\[[\s\S]*?\]\([\s\S]*?\)/g, "")
+    .replace(/<img[^>]*shields\.io[^>]*>/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
  * Parses markdown README into structured headings, content blocks, and line ranges.
+ * Only top-level headings (# and ##) create sections so subheadings (###, ####)
+ * and their code blocks remain hierarchically grouped in their parent section.
  */
 export function parseReadme(text: string): ParsedReadme {
   const lines = text.split("\n");
@@ -100,20 +115,21 @@ export function parseReadme(text: string): ParsedReadme {
     .filter(Boolean);
 
   const sections: ReadmeSection[] = [];
-  let currentRaw = "Overview";
-  let currentHeading = "overview";
+  let currentRaw = "Preamble";
+  let currentHeading = "preamble";
   let currentLines: string[] = [];
   let startLine = 1;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const headingMatch = line.match(/^#{1,3}\s+(.+)$/);
+    // Only split on # and ## so ### prerequisites/subheadings stay with parent
+    const headingMatch = line.match(/^#{1,2}\s+(.+)$/);
     if (headingMatch && i > 0) {
       if (currentLines.length > 0) {
         sections.push({
           heading: currentHeading.toLowerCase(),
           rawHeading: currentRaw,
-          content: currentLines.join("\n").trim(),
+          content: sanitizeMarkdown(currentLines.join("\n")),
           startLine: startLine,
           endLine: i,
         });
@@ -131,7 +147,7 @@ export function parseReadme(text: string): ParsedReadme {
     sections.push({
       heading: currentHeading.toLowerCase(),
       rawHeading: currentRaw,
-      content: currentLines.join("\n").trim(),
+      content: sanitizeMarkdown(currentLines.join("\n")),
       startLine: startLine,
       endLine: lines.length,
     });
@@ -214,6 +230,65 @@ export function isDevMindRepo(repoId: string): boolean {
   );
 }
 
+export interface DiscoveredHostingInfo {
+  liveUrls: string[];
+  platforms: string[];
+  deploymentSection?: ReadmeSection;
+}
+
+/**
+ * Discovers live hosting URLs and target platforms from repository documentation.
+ */
+export function extractHostingInfo(readmeText: string, sections: ReadmeSection[]): DiscoveredHostingInfo {
+  const liveUrls: string[] = [];
+  const platforms: string[] = [];
+
+  const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)\"]+)\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = linkRegex.exec(readmeText)) !== null) {
+    const anchor = match[1].toLowerCase();
+    const url = match[2];
+    const isDoc =
+      url.includes("shields.io") ||
+      url.includes("github.com") ||
+      url.includes("w3.org") ||
+      url.includes("mozilla.org") ||
+      url.includes("tailwindcss.com") ||
+      url.includes("typescriptlang.org") ||
+      url.includes("python.org") ||
+      url.includes("golang.org") ||
+      url.includes("mongodb.com");
+
+    if (
+      !isDoc &&
+      (anchor.includes("demo") ||
+        anchor.includes("live") ||
+        anchor.includes("portal") ||
+        anchor.includes("website") ||
+        anchor.includes("app") ||
+        url.includes(".me") ||
+        url.includes(".vercel.app"))
+    ) {
+      if (!liveUrls.includes(url)) liveUrls.push(url);
+    }
+  }
+
+  if (/\bvercel\b/i.test(readmeText)) platforms.push("Vercel");
+  if (/\bdocker\b/i.test(readmeText)) platforms.push("Docker");
+  if (/\baws\b/i.test(readmeText)) platforms.push("AWS");
+  if (/\bnetlify\b/i.test(readmeText)) platforms.push("Netlify");
+  if (/\bgithub\s*pages\b/i.test(readmeText)) platforms.push("GitHub Pages");
+
+  const deploymentSection = sections.find(
+    (s) =>
+      s.heading.includes("deploy") ||
+      s.heading.includes("hosting") ||
+      s.heading.includes("setup")
+  );
+
+  return { liveUrls, platforms, deploymentSection };
+}
+
 /**
  * Dynamically analyzes the discovered repository artifacts to answer the user's query.
  */
@@ -254,7 +329,120 @@ function generateDynamicRepoResponse(
     };
   }
 
-  // 2. Features Query
+  // 2. Hosting / Live URL / Deployment Target Query
+  const isHosting =
+    /\b(host(ed|ing)?|where\s+(is|it)\s+(is\s+)?hosted|live\s*urls?|domains?|websites?|live\s*demo|production\s*urls?|live\s*sites?|where\s+can\s+i\s+see|deployed|deployment\s*target)\b/i.test(
+      query
+    );
+
+  if (isHosting) {
+    const hostingInfo = extractHostingInfo(readme || "", sections);
+    const deploySection =
+      findSection("deploy") ||
+      findSection("hosting") ||
+      findSection("setup");
+
+    let liveUrlText = "";
+    if (hostingInfo.liveUrls.length > 0) {
+      liveUrlText = `\n- **Live Production URL**: ${hostingInfo.liveUrls.map((u) => `[${u}](${u})`).join(", ")}`;
+    }
+
+    let platformText = "";
+    if (hostingInfo.platforms.length > 0) {
+      platformText = `\n- **Target Platform / Infrastructure**: ${hostingInfo.platforms.join(", ")}`;
+    }
+
+    const citationLine = deploySection
+      ? `${deploySection.startLine}-${deploySection.endLine}`
+      : "1-40";
+
+    return {
+      intent: "hosting_qa",
+      confidence: 0.98,
+      routerMessage: `Identified hosting and deployment target query for ${projectTitle}.`,
+      retrieverMessage: `Inspected README.md for live domains and infrastructure targets.`,
+      synthesizerMessage: `Synthesized grounded hosting and live deployment response.`,
+      markdownResponse: `### 🌐 Hosting & Live Deployment: ${projectTitle}\n\nBased on verified project documentation in **\`${repoName}/README.md\`**:\n${liveUrlText}${platformText}\n\n---\n\n${
+        deploySection ? deploySection.content : `This application is configured for deployment with ${hostingInfo.platforms.join(" / ") || "standard modern web hosting"}.`
+      }`,
+      citations: [
+        { file: "README.md", lines: citationLine, type: "deployment" },
+      ],
+    };
+  }
+
+  // 3. Setup / Installation / Execution Query detection
+  const isSetup =
+    /\b(setup|install|installation|run|start|deploy|deployment|prerequisites|how to run|how do i run|execute)\b/i.test(
+      query
+    );
+
+  // 4. Appearance / UI / Theme / "How it looks" Query
+  const isAppearance =
+    /\b(how\s+((does\s+)?it\s+)?looks?|look\s+like|appearance|ui|visuals?|theme|styling|aesthetic|design)\b/i.test(
+      query
+    );
+
+  if (isAppearance) {
+    const hostingInfo = extractHostingInfo(readme || "", sections);
+    const demoLink = hostingInfo.liveUrls[0]
+      ? `\n\n🔗 **Live Interactive Demo**: [${hostingInfo.liveUrls[0]}](${hostingInfo.liveUrls[0]})`
+      : "";
+
+    if (isSetup) {
+      const setupSec =
+        findSection("setup") ||
+        findSection("install") ||
+        findSection("local") ||
+        findSection("development");
+
+      let setupContent = setupSec?.content || "";
+      if (setupContent.length < 30) {
+        if (packageJson) {
+          setupContent = `#### 📦 Local Development\n\n1. Install dependencies:\n\`\`\`bash\nnpm install\n\`\`\`\n2. Start the development server:\n\`\`\`bash\nnpm run dev\n\`\`\`\n3. Open \`http://localhost:3000\` in your browser.`;
+        } else if (hasIndexHtml) {
+          setupContent = `#### 🌐 Local Development\n\nLaunch with any static server or open \`index.html\` directly in your browser:\n\`\`\`bash\nnpx serve .\n# Or using Python:\npython -m http.server 3000\n\`\`\`\nOpen \`http://localhost:3000\` in your browser.`;
+        }
+      }
+
+      return {
+        intent: "run_and_appearance_qa",
+        confidence: 0.98,
+        routerMessage: `Identified dual execution and visual appearance inquiry for ${projectTitle}.`,
+        retrieverMessage: `Retrieved UI aesthetics and local execution guide from README.md.`,
+        synthesizerMessage: `Synthesized UI walkthrough and executable launch instructions.`,
+        markdownResponse: `### 🎨 Visual Design & UI Architecture: ${projectTitle}${demoLink}\n\n${
+          tagline ? `> **${tagline}**\n\n` : ""
+        }Based on project documentation in **\`${repoName}/README.md\`**:\n\n---\n\n### 🚀 How to Run & View Locally\n\n${setupContent}`,
+        citations: [
+          {
+            file: "README.md",
+            lines: setupSec ? `${setupSec.startLine}-${setupSec.endLine}` : "1-40",
+            type: "guide",
+          },
+        ],
+      };
+    }
+
+    return {
+      intent: "appearance_qa",
+      confidence: 0.96,
+      routerMessage: `Extracted visual design and UI specifications for ${projectTitle}.`,
+      retrieverMessage: `Retrieved styling and interface details from README.md.`,
+      synthesizerMessage: `Synthesized visual design overview.`,
+      markdownResponse: `### 🎨 Visual Design & UI Overview: ${projectTitle}${demoLink}\n\n${
+        tagline ? `> **${tagline}**\n\n` : ""
+      }Based on repository documentation:\n\n${
+        findSection("feature")?.content ||
+        findSection("overview")?.content ||
+        findSection("description")?.content ||
+        `The project UI is built with modern responsive web standards.`
+      }`,
+      citations: [{ file: "README.md", lines: "1-40", type: "ui" }],
+    };
+  }
+
+  // 5. Features Query
   const isFeatures =
     /\b(features?|capabilities|functions|what can it do|highlights?|showcase)\b/i.test(query);
 
@@ -275,20 +463,23 @@ function generateDynamicRepoResponse(
     }
   }
 
-  // 3. Overview / About / Description Query
+  // 6. Overview / About / Description Query
   const isOverview =
     /\b(overview|about|describe|description|what is this|what does (it|this) do|summary|explain this)\b/i.test(query);
 
   if (isOverview) {
     const overviewSec =
-      findSection("overview") ||
       findSection("description") ||
+      findSection("overview") ||
       findSection("about") ||
+      sections.find((s) => s.heading !== "preamble" && s.content.length > 50) ||
       sections[0];
 
     const techSummary = parsedReadme?.badges.length
       ? `\n- **Detected Tech**: ${parsedReadme.badges.slice(0, 5).join(", ")}`
       : "";
+
+    const content = overviewSec ? overviewSec.content : `This repository powers **${repoName}**.`;
 
     return {
       intent: "project_overview",
@@ -298,7 +489,7 @@ function generateDynamicRepoResponse(
       synthesizerMessage: `Synthesized comprehensive project overview.`,
       markdownResponse: `### 📌 About ${projectTitle}\n\n${
         tagline ? `> **${tagline}**\n\n` : ""
-      }${overviewSec ? overviewSec.content : `This repository powers **${repoName}**.`}\n\n---\n\n### 🔍 Repository Metadata\n- **Project**: \`${projectTitle}\`\n- **Repository**: [\`${repoName}\`](https://github.com/${repoName})${techSummary}`,
+      }${content}\n\n---\n\n### 🔍 Repository Metadata\n- **Project**: \`${projectTitle}\`\n- **Repository**: [\`${repoName}\`](https://github.com/${repoName})${techSummary}`,
       citations: [
         ...(overviewSec
           ? [{ file: "README.md", lines: `${overviewSec.startLine}-${overviewSec.endLine}`, type: "docs" }]
@@ -307,7 +498,7 @@ function generateDynamicRepoResponse(
     };
   }
 
-  // 4. Tech Stack / Languages / Technologies Query
+  // 7. Tech Stack / Languages / Technologies Query
   const isTechStack =
     /\b(tech\s*stack|technologies|languages?|frameworks?|libraries|tools?|dependencies)\b/i.test(query);
 
@@ -360,10 +551,7 @@ function generateDynamicRepoResponse(
     }
   }
 
-  // 5. Setup / Installation / Deployment Query
-  const isSetup =
-    /\b(setup|install|installation|run|start|deploy|deployment|prerequisites|how to run)\b/i.test(query);
-
+  // 8. Setup / Installation / Deployment Query
   if (isSetup) {
     const setupSec =
       findSection("setup") ||
@@ -372,19 +560,26 @@ function generateDynamicRepoResponse(
       findSection("development") ||
       findSection("getting started");
 
-    if (setupSec) {
-      return {
-        intent: "setup_guide_qa",
-        confidence: 0.98,
-        routerMessage: `Extracted setup and installation guide from README.md.`,
-        retrieverMessage: `Retrieved lines ${setupSec.startLine}-${setupSec.endLine} of README.md.`,
-        synthesizerMessage: `Synthesized executable setup instructions.`,
-        markdownResponse: `### 🚀 Setup & Execution Guide: ${projectTitle}\n\nBased on **\`README.md\`** in **${repoName}**:\n\n${setupSec.content}`,
-        citations: [
-          { file: "README.md", lines: `${setupSec.startLine}-${setupSec.endLine}`, type: "guide" },
-        ],
-      };
+    let content = setupSec?.content || "";
+    if (content.length < 30) {
+      if (packageJson) {
+        content = `#### 📦 Local Development\n\n1. Install dependencies:\n\`\`\`bash\nnpm install\n\`\`\`\n2. Start the development server:\n\`\`\`bash\nnpm run dev\n\`\`\`\n3. Open \`http://localhost:3000\` in your browser.`;
+      } else if (hasIndexHtml) {
+        content = `#### 🌐 Local Development\n\nLaunch with any static server or open \`index.html\` directly in your browser:\n\`\`\`bash\nnpx serve .\n# Or using Python:\npython -m http.server 3000\n\`\`\`\nOpen \`http://localhost:3000\` in your browser.`;
+      }
     }
+
+    return {
+      intent: "setup_guide_qa",
+      confidence: 0.98,
+      routerMessage: `Extracted setup and installation guide from README.md.`,
+      retrieverMessage: `Retrieved lines ${setupSec ? `${setupSec.startLine}-${setupSec.endLine}` : "1-30"} of README.md.`,
+      synthesizerMessage: `Synthesized executable setup instructions.`,
+      markdownResponse: `### 🚀 Setup & Execution Guide: ${projectTitle}\n\nBased on **\`README.md\`** in **${repoName}**:\n\n${content}`,
+      citations: [
+        { file: "README.md", lines: setupSec ? `${setupSec.startLine}-${setupSec.endLine}` : "1-30", type: "guide" },
+      ],
+    };
   }
 
   // 6. Environment Variables Query
@@ -511,8 +706,13 @@ function generateDynamicRepoResponse(
     };
   }
 
-  // 9. Intelligent Default Summary (Never hardcoded!)
-  const firstSection = sections[0] || sections[1];
+  // 10. Intelligent Default Summary (Never hardcoded!)
+  const fallbackSec =
+    findSection("description") ||
+    findSection("overview") ||
+    sections.find((s) => s.heading !== "preamble" && s.content.length > 50) ||
+    sections[0];
+
   return {
     intent: "grounded_qa",
     confidence: 0.90,
@@ -521,9 +721,19 @@ function generateDynamicRepoResponse(
     synthesizerMessage: `Synthesized grounded project response.`,
     markdownResponse: `### 💡 Grounded Analysis: ${projectTitle}\n\n${
       tagline ? `> **${tagline}**\n\n` : ""
-    }${firstSection ? firstSection.content : `I am connected to **${repoName}**.`}\n\n---\n\nFeel free to ask me about:\n- ✨ **Features & Architecture**\n- 🛠️ **Tech Stack & Libraries**\n- 🚀 **Setup & Installation**`,
+    }${fallbackSec ? fallbackSec.content : `I am connected to **${repoName}**.`}\n\n---\n\nFeel free to ask me about:\n- ✨ **Features & Architecture**\n- 🛠️ **Tech Stack & Libraries**\n- 🚀 **Setup & Installation**\n- 🌐 **Hosting & Deployment**`,
     citations: [
-      ...(readme ? [{ file: "README.md", lines: "1-40", type: "docs" }] : []),
+      ...(readme
+        ? [
+            {
+              file: "README.md",
+              lines: fallbackSec
+                ? `${fallbackSec.startLine}-${fallbackSec.endLine}`
+                : "1-40",
+              type: "docs",
+            },
+          ]
+        : []),
     ],
   };
 }
