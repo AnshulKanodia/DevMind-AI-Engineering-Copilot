@@ -275,6 +275,17 @@ DevMind Web UI will be accessible at:
 
 ---
 
+## 📚 Documentation & Production Guides
+
+Complete engineering specifications, runbooks, and walk-through scripts:
+
+- 🏛️ **[System Architecture & Design (docs/ARCHITECTURE.md)](docs/ARCHITECTURE.md)**: Multi-agent topology, language-aware AST chunking, hybrid retrieval fusion ($\alpha$-weighted BM25 + dense vector embeddings), and non-root container hardening.
+- 📡 **[REST API & SSE Protocol Reference (docs/API_REFERENCE.md)](docs/API_REFERENCE.md)**: Full endpoint definitions, request/response schemas, SSE event frames, rate limiting, and HTTP error codes.
+- 🚀 **[Production Deployment Playbook (docs/DEPLOYMENT_PLAYBOOK.md)](docs/DEPLOYMENT_PLAYBOOK.md)**: Runbooks for Vercel Serverless, Docker Compose, Kubernetes (`kubectl apply -k deploy/k8s`), AWS ECS Fargate, and secret rotation.
+- 🎬 **[Developer Walkthrough & Demo Script (docs/DEMO_SCRIPT.md)](docs/DEMO_SCRIPT.md)**: Scene-by-scene demonstration script covering repository onboarding, grounded Q&A citations, environment detection, and CI/CD quality gates.
+
+---
+
 ## 🧪 Testing
 
 Run backend test suites:
