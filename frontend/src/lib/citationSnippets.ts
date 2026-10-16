@@ -216,7 +216,7 @@ export const KNOWN_CITATIONS: Record<string, Partial<CitationData>> = {
     bm25Score: 19.5,
     combinedScore: 0.965,
     code: `# MongoDB Atlas Connection URI
-MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/personal_finance?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/personal_finance?retryWrites=true&w=majority
 
 # Security: PIN code for single-user authentication (6 digits)
 APP_PIN=123456

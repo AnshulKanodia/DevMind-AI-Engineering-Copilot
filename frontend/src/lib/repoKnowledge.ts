@@ -119,7 +119,7 @@ Based on the repository configuration in **\`.env.example\`** and **\`lib/mongod
 
 | Environment Variable | Required | Default / Example | Purpose & File Citation |
 | :--- | :---: | :--- | :--- |
-| **\`MONGODB_URI\`** | **Required** | \`mongodb+srv://<user>:<password>@cluster0.mongodb.net/personal_finance?retryWrites=true&w=majority\` | MongoDB Atlas connection string for persistent transactions & ledgers (\`lib/mongodb.ts:13-25\`). |
+| **\`MONGODB_URI\`** | **Required** | \`mongodb+srv://<username>:<password>@<cluster>.mongodb.net/personal_finance?retryWrites=true&w=majority\` | MongoDB Atlas connection string for persistent transactions & ledgers (\`lib/mongodb.ts:13-25\`). |
 | **\`APP_PIN\`** | **Required** | \`123456\` | 6-digit numeric PIN for single-user vault lock authentication (\`app/api/auth/pin/route.ts:12-28\`). |
 | **\`SESSION_SECRET\`** | **Required** | \`personal-finance-secret-key-32-chars-minimum-token\` | High-entropy cryptographic key (min 32 chars) for signing HS256 JWT session cookies (\`lib/auth.ts:6-18\`). |
 | **\`NEXT_PUBLIC_USER_NAME\`** | Optional | \`"Vault Owner"\` | Display name shown in navigation bar and personal finance reports (\`.env.example:10-11\`). |
@@ -136,7 +136,7 @@ cp .env.example .env.local
 2. **Populate your \`.env.local\`**:
 \`\`\`env
 # MongoDB Atlas Connection URI
-MONGODB_URI=mongodb+srv://admin:YourSecurePassword@cluster0.mongodb.net/personal_finance?retryWrites=true&w=majority
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/personal_finance?retryWrites=true&w=majority
 
 # Security: 6-digit PIN code for single-user authentication
 APP_PIN=123456
