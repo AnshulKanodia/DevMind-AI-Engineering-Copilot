@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import agents, approvals, auth, git_ops, guardrails, repos, scans
+from app.api.v1.endpoints import agents, approvals, auth, eval, git_ops, guardrails, repos, scans
 
 api_router = APIRouter()
 
@@ -23,6 +23,9 @@ api_router.include_router(approvals.router, prefix="/approvals", tags=["Human Ap
 
 # Register Token Guardrails & Usage Accounting endpoints
 api_router.include_router(guardrails.router, prefix="/guardrails", tags=["Guardrails & Token Usage"])
+
+# Register RAG Golden Dataset & Evaluation endpoints
+api_router.include_router(eval.router, prefix="/eval", tags=["RAG Golden Evaluation"])
 
 
 @api_router.get("/status", tags=["Status"])
