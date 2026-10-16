@@ -1,0 +1,136 @@
+name: DevMind CI/CD & Quality Gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-lint-and-test:
+    name: Backend Lint, Security & Unit Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Ruff Code Quality & Lint
+        run: ruff check . --config ruff.toml
+
+      - name: Ruff Code Formatting Check
+        run: ruff format --check . --config ruff.toml
+
+      - name: Run Pytest Test Suite
+        env:
+          SECRET_KEY: "ci-test-secret-key-for-jwt-signing-minimum-32-chars"
+          ENCRYPTION_KEY: "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw=="
+          MONGODB_URI: "mongodb://localhost:27017/devmind_test"
+          REDIS_URL: "redis://localhost:6379/0"
+        run: |
+          pytest tests/ -v --tb=short
+
+  frontend-lint-and-test:
+    name: Frontend Lint, Test Suite & Standalone Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run Test Suite (Autonomous Research & Streaming)
+        run: npm test
+
+      - name: Verify Next.js Production Build
+        run: npm run build
+
+  rag-eval-gate:
+    name: RAG Evaluation Benchmark & Grounding Gate
+    needs: [backend-lint-and-test]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Execute Golden Dataset RAG Evaluation
+        env:
+          SECRET_KEY: "ci-test-secret-key-for-jwt-signing-minimum-32-chars"
+          ENCRYPTION_KEY: "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcw=="
+          MONGODB_URI: "mongodb://localhost:27017/devmind_test"
+        run: |
+          pytest tests/test_rag_eval.py -v --tb=short
+
+  docker-build-verification:
+    name: Production Docker Build & Hardening Verification
+    needs: [backend-lint-and-test, frontend-lint-and-test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          tags: devmind-backend:ci-test
+
+      - name: Build Frontend Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          tags: devmind-frontend:ci-test
