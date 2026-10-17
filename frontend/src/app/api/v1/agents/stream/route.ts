@@ -120,7 +120,8 @@ Instructions:
                 streamedWithGemini = true;
               }
             }
-          } catch {
+          } catch (geminiErr: any) {
+            console.error("[Gemini Stream Error]:", geminiErr?.message || geminiErr);
             streamedWithGemini = false;
           }
         }
