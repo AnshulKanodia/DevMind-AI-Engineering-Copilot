@@ -54,7 +54,12 @@ export async function validateGeminiApiKey(apiKey: string): Promise<{ valid: boo
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}`;
-    const res = await fetch(url, { method: "GET" });
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "x-goog-api-key": apiKey.trim(),
+      },
+    });
     if (res.ok) {
       return { valid: true };
     }
@@ -94,7 +99,10 @@ export async function* streamGeminiChat(
 
   const response = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey.trim(),
+    },
     body: JSON.stringify(payload),
     signal: options.signal,
   });
