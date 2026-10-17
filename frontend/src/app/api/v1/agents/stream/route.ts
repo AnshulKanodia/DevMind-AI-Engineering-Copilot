@@ -11,7 +11,8 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { repo_id = "default", query = "" } = body;
+    const repo_id = body.repo_id || body.repo_url || "default";
+    const query = body.query || body.user_query || "";
 
     // 1. If backend URL is set and not localhost in production, attempt proxy
     const backendUrl = process.env.BACKEND_INTERNAL_URL;
