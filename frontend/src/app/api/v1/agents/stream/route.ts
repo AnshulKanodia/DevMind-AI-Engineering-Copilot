@@ -1,6 +1,9 @@
 import { NextRequest } from "next/server";
 import { resolveGroundedRepoQuery, discoverRepoContext } from "@/lib/repoKnowledge";
-import { resolveGeminiApiKey, streamGeminiChat } from "@/lib/geminiClient";
+import {
+  resolveGeminiApiKey,
+  streamGeminiWithFailover,
+} from "@/lib/geminiClient";
 
 export const dynamic = "force-dynamic";
 
@@ -105,14 +108,26 @@ Instructions:
 3. Whenever referencing files or sections, cite them using markdown (e.g., [README.md:1-50]).
 4. Provide complete, executable commands without leaving blank instructions.`;
 
-            const primaryModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-            const geminiGenerator = streamGeminiChat(
+            const clientPrimary = req.headers.get("x-gemini-primary-model") || undefined;
+            const clientFailover = req.headers.get("x-gemini-failover-model") || undefined;
+
+            const geminiGenerator = streamGeminiWithFailover(
               geminiKey.key,
               [{ role: "user", parts: [{ text: query }] }],
               {
-                model: primaryModel,
+                modelConfig: {
+                  primaryModel: clientPrimary,
+                  failoverModel: clientFailover,
+                },
                 systemInstruction: systemPrompt,
                 temperature: 0.2,
+                onModelChange: (event) => {
+                  sendEvent("model_status", {
+                    model: event.modelUsed,
+                    failover: event.switched,
+                    reason: event.failoverReason,
+                  });
+                },
               }
             );
 
@@ -123,28 +138,8 @@ Instructions:
               }
             }
           } catch (geminiErr: any) {
-            console.error("[Gemini Stream Error]:", geminiErr?.message || geminiErr);
-            // Attempt fallback to gemini-2.5-flash-lite
-            try {
-              const fallbackGenerator = streamGeminiChat(
-                geminiKey.key,
-                [{ role: "user", parts: [{ text: query }] }],
-                {
-                  model: "gemini-2.5-flash-lite",
-                  systemInstruction: systemPrompt,
-                  temperature: 0.2,
-                }
-              );
-              for await (const token of fallbackGenerator) {
-                if (token) {
-                  sendEvent("token", { token });
-                  streamedWithGemini = true;
-                }
-              }
-            } catch (liteErr: any) {
-              console.error("[Gemini Flash-Lite Stream Error]:", liteErr?.message || liteErr);
-              streamedWithGemini = false;
-            }
+            console.error("[Gemini Stream Failover Error]:", geminiErr?.message || geminiErr);
+            streamedWithGemini = false;
           }
         }
 

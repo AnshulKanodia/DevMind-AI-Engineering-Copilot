@@ -36,11 +36,24 @@ export async function streamAgentChat(
 
   // Try real backend endpoint first
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (typeof window !== "undefined") {
+      const storedKey = localStorage.getItem("devmind_gemini_api_key");
+      if (storedKey && storedKey.trim().length > 10) {
+        headers["x-gemini-key"] = storedKey.trim();
+      }
+      const primaryModel = localStorage.getItem("devmind_gemini_primary_model");
+      if (primaryModel) headers["x-gemini-primary-model"] = primaryModel;
+      const failoverModel = localStorage.getItem("devmind_gemini_failover_model");
+      if (failoverModel) headers["x-gemini-failover-model"] = failoverModel;
+    }
+
     const response = await fetch(`${API_BASE}/api/v1/agents/stream`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify({
         repo_id: repoId,
         query: query,
@@ -104,6 +117,16 @@ export async function streamAgentChat(
                   node: "retriever",
                   status: "completed",
                   message: `Retrieved ${parsed.chunk_count || 5} AST chunks via hybrid search (α=0.5)`,
+                  timestamp: new Date().toISOString(),
+                  details: parsed,
+                });
+              } else if (eventType === "model_status") {
+                callbacks.onThought({
+                  node: "orchestrator",
+                  status: parsed.failover ? "running" : "completed",
+                  message: parsed.failover
+                    ? `Load shifted to failover model: ${parsed.model} (${parsed.reason || "Quota/rate limit switch"})`
+                    : `Active Gemini reasoning model: ${parsed.model}`,
                   timestamp: new Date().toISOString(),
                   details: parsed,
                 });

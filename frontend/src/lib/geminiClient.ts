@@ -17,6 +17,24 @@ export interface GeminiStreamOptions {
   signal?: AbortSignal;
 }
 
+export interface FailoverModelConfig {
+  primaryModel: string;
+  failoverModel: string;
+  tertiaryModel?: string;
+}
+
+export const DEFAULT_MODEL_CONFIG: FailoverModelConfig = {
+  primaryModel: "gemini-2.5-flash",
+  failoverModel: "gemini-3.5-flash-lite",
+  tertiaryModel: "gemini-2.5-flash-lite",
+};
+
+export interface FailoverStreamEvent {
+  modelUsed: string;
+  switched: boolean;
+  failoverReason?: string;
+}
+
 export interface ResolvedGeminiKey {
   key: string;
   source: "header" | "env";
@@ -174,3 +192,86 @@ export async function* streamGeminiChat(
     }
   }
 }
+
+/**
+ * Intelligent Multi-Model Orchestrator with Automatic Failover.
+ * Tries the primary model (gemini-2.5-flash). If rate-limited (429), overloaded,
+ * or unavailable (503), it immediately shifts the load to the failover model
+ * (gemini-3.5-flash-lite) and tertiary backup (gemini-2.5-flash-lite).
+ */
+export async function* streamGeminiWithFailover(
+  apiKey: string,
+  messages: GeminiMessage[],
+  options: GeminiStreamOptions & {
+    modelConfig?: Partial<FailoverModelConfig>;
+    onModelChange?: (event: FailoverStreamEvent) => void;
+  } = {}
+): AsyncGenerator<string, void, unknown> {
+  const primary =
+    options.modelConfig?.primaryModel ||
+    process.env.GEMINI_PRIMARY_MODEL ||
+    DEFAULT_MODEL_CONFIG.primaryModel;
+
+  const failover =
+    options.modelConfig?.failoverModel ||
+    process.env.GEMINI_FAILOVER_MODEL ||
+    DEFAULT_MODEL_CONFIG.failoverModel;
+
+  const tertiary =
+    options.modelConfig?.tertiaryModel ||
+    DEFAULT_MODEL_CONFIG.tertiaryModel;
+
+  const candidateModels = Array.from(
+    new Set([primary, failover, tertiary].filter(Boolean) as string[])
+  );
+
+  let streamSucceeded = false;
+  let lastError: Error | null = null;
+
+  for (let i = 0; i < candidateModels.length; i++) {
+    const currentModel = candidateModels[i];
+    const isFailover = i > 0;
+
+    try {
+      if (isFailover && options.onModelChange) {
+        options.onModelChange({
+          modelUsed: currentModel,
+          switched: true,
+          failoverReason: lastError?.message || "Primary model reached quota or is unavailable",
+        });
+      }
+
+      const stream = streamGeminiChat(apiKey, messages, {
+        ...options,
+        model: currentModel,
+      });
+
+      let receivedToken = false;
+      for await (const token of stream) {
+        if (!receivedToken && !isFailover && options.onModelChange) {
+          options.onModelChange({
+            modelUsed: currentModel,
+            switched: false,
+          });
+        }
+        receivedToken = true;
+        yield token;
+      }
+
+      if (receivedToken) {
+        streamSucceeded = true;
+        break; // Successfully completed streaming
+      }
+    } catch (err: any) {
+      console.warn(
+        `[DevMind Model Failover] Model ${currentModel} failed: ${err?.message || err}. Shifting load...`
+      );
+      lastError = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+
+  if (!streamSucceeded && lastError) {
+    throw lastError;
+  }
+}
+

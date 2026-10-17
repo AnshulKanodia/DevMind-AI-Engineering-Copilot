@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   resolveGeminiApiKey,
   validateGeminiApiKey,
+  DEFAULT_MODEL_CONFIG,
+  streamGeminiWithFailover,
   type GeminiMessage,
 } from "../src/lib/geminiClient.ts";
 
@@ -63,3 +65,42 @@ test("GeminiClient - rejects invalid or empty API key format in validator", asyn
   const resultShort = await validateGeminiApiKey("short");
   assert.equal(resultShort.valid, false);
 });
+
+test("GeminiClient - DEFAULT_MODEL_CONFIG defines gemini-2.5-flash as primary and gemini-3.5-flash-lite as failover", () => {
+  assert.equal(DEFAULT_MODEL_CONFIG.primaryModel, "gemini-2.5-flash");
+  assert.equal(DEFAULT_MODEL_CONFIG.failoverModel, "gemini-3.5-flash-lite");
+  assert.equal(DEFAULT_MODEL_CONFIG.tertiaryModel, "gemini-2.5-flash-lite");
+});
+
+test("GeminiClient - streamGeminiWithFailover cascades to next model on initial failure", async () => {
+  const events: any[] = [];
+  try {
+    const generator = streamGeminiWithFailover(
+      "invalid-test-api-key-12345",
+      [{ role: "user", parts: [{ text: "ping" }] }],
+      {
+        modelConfig: {
+          primaryModel: "gemini-2.5-flash",
+          failoverModel: "gemini-3.5-flash-lite",
+        },
+        onModelChange: (ev) => {
+          events.push(ev);
+        },
+      }
+    );
+
+    // Consume generator to trigger execution
+    for await (const _token of generator) {
+      // Won't yield with invalid test key
+    }
+  } catch (err: any) {
+    // Both models should fail with invalid key, proving it attempted failover
+    assert.ok(err);
+  }
+
+  // At least one failover attempt was recorded
+  assert.ok(events.length >= 1);
+  assert.equal(events[0].modelUsed, "gemini-3.5-flash-lite");
+  assert.equal(events[0].switched, true);
+});
+
