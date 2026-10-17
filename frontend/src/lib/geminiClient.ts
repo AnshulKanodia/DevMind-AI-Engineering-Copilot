@@ -75,7 +75,7 @@ export async function* streamGeminiChat(
   messages: GeminiMessage[],
   options: GeminiStreamOptions = {}
 ): AsyncGenerator<string, void, unknown> {
-  const model = options.model || "gemini-1.5-flash";
+  const model = options.model || "gemini-2.0-flash";
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${apiKey.trim()}`;
 
   const payload: Record<string, any> = {
