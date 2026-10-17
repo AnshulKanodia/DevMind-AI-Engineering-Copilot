@@ -104,11 +104,12 @@ Instructions:
 3. Whenever referencing files or sections, cite them using markdown (e.g., [README.md:1-50]).
 4. Provide complete, executable commands without leaving blank instructions.`;
 
+            const primaryModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
             const geminiGenerator = streamGeminiChat(
               geminiKey.key,
               [{ role: "user", parts: [{ text: query }] }],
               {
-                model: "gemini-2.0-flash",
+                model: primaryModel,
                 systemInstruction: systemPrompt,
                 temperature: 0.2,
               }
@@ -122,7 +123,27 @@ Instructions:
             }
           } catch (geminiErr: any) {
             console.error("[Gemini Stream Error]:", geminiErr?.message || geminiErr);
-            streamedWithGemini = false;
+            // Attempt fallback to gemini-2.5-flash-lite
+            try {
+              const fallbackGenerator = streamGeminiChat(
+                geminiKey.key,
+                [{ role: "user", parts: [{ text: query }] }],
+                {
+                  model: "gemini-2.5-flash-lite",
+                  systemInstruction: systemPrompt,
+                  temperature: 0.2,
+                }
+              );
+              for await (const token of fallbackGenerator) {
+                if (token) {
+                  sendEvent("token", { token });
+                  streamedWithGemini = true;
+                }
+              }
+            } catch (liteErr: any) {
+              console.error("[Gemini Flash-Lite Stream Error]:", liteErr?.message || liteErr);
+              streamedWithGemini = false;
+            }
           }
         }
 
