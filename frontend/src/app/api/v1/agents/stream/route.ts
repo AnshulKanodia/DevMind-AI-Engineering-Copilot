@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { resolveGroundedRepoQuery, discoverRepoContext } from "@/lib/repoKnowledge";
+import { fetchRelevantSourceSnippets } from "@/lib/repoCodeFetcher";
 import {
   resolveGeminiApiKey,
   streamGeminiWithFailover,
@@ -44,9 +45,17 @@ export async function POST(req: NextRequest) {
     // 2. Resolve Gemini API Key (from incoming headers or Vercel env variable)
     const geminiKey = resolveGeminiApiKey(req.headers);
 
-    // 3. Autonomous Repository Research (Grounded Baseline)
-    const result = await resolveGroundedRepoQuery(repo_id, query);
-    const repoContext = await discoverRepoContext(repo_id);
+    // 3. Autonomous Repository Research (Grounded Baseline + Real Source Code)
+    const [result, repoContext, codeSnippets] = await Promise.all([
+      resolveGroundedRepoQuery(repo_id, query),
+      discoverRepoContext(repo_id),
+      fetchRelevantSourceSnippets(repo_id, query),
+    ]);
+
+    const codeCitations = codeSnippets.map((s) => `${s.path}:${s.startLine}-${s.endLine}`);
+    const allCitations = Array.from(
+      new Set([...codeCitations, ...result.citations.map((c) => `${c.file}:${c.lines}`)])
+    );
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
@@ -77,9 +86,11 @@ export async function POST(req: NextRequest) {
         await sleep(100);
 
         sendEvent("retrieval_complete", {
-          chunk_count: result.citations.length || 3,
+          chunk_count: allCitations.length || 3,
           strategy: geminiKey ? "gemini_context_grounded" : "hybrid_ast_bm25_dense",
-          message: result.retrieverMessage,
+          message: codeSnippets.length > 0
+            ? `Retrieved ${codeSnippets.length} relevant source files and AST chunks.`
+            : result.retrieverMessage,
         });
         await sleep(100);
 
@@ -90,22 +101,36 @@ export async function POST(req: NextRequest) {
 
         if (geminiKey) {
           try {
+            const formattedCode =
+              codeSnippets.length > 0
+                ? codeSnippets
+                    .map(
+                      (s) =>
+                        `### File: ${s.path} (Lines ${s.startLine}-${s.endLine}):\n\`\`\`\n${s.content}\n\`\`\``
+                    )
+                    .join("\n\n")
+                : "No specific source files matched the query.";
+
             const systemPrompt = `You are DevMind, an expert AI Engineering Copilot.
 You are connected to repository: "${repo_id}".
 Active project title: "${repoContext?.parsedReadme?.title || repo_id}".
-Repository context documentation:
-${repoContext?.readme ? repoContext.readme.slice(0, 8000) : "No README available."}
 
-Package configuration:
-${repoContext?.packageJson ? JSON.stringify(repoContext.packageJson, null, 2).slice(0, 2000) : "None"}
+Repository Context Documentation:
+${repoContext?.readme ? repoContext.readme.slice(0, 5000) : "No README available."}
 
-Environment example:
-${repoContext?.envExample ? repoContext.envExample.slice(0, 1000) : "None"}
+Package Configuration:
+${repoContext?.packageJson ? JSON.stringify(repoContext.packageJson, null, 2).slice(0, 1500) : "None"}
+
+Environment Example:
+${repoContext?.envExample ? repoContext.envExample.slice(0, 800) : "None"}
+
+Relevant Source Code Files:
+${formattedCode}
 
 Instructions:
 1. Answer the user's question directly, accurately, and politely with markdown formatting.
-2. Ground your explanations in the actual repository files, dependencies, and configuration.
-3. Whenever referencing files or sections, cite them using markdown (e.g., [README.md:1-50]).
+2. Ground your explanations in the actual repository files, source code, dependencies, and configuration.
+3. Whenever referencing files, functions, or sections, cite them using markdown with line numbers (e.g., [src/auth.ts:1-40]).
 4. Provide complete, executable commands without leaving blank instructions.`;
 
             const clientPrimary = req.headers.get("x-gemini-primary-model") || undefined;
@@ -155,7 +180,7 @@ Instructions:
 
         // Citations Frame
         sendEvent("citations", {
-          citations: result.citations.map((c) => `${c.file}:${c.lines}`),
+          citations: allCitations,
         });
         await sleep(50);
 
