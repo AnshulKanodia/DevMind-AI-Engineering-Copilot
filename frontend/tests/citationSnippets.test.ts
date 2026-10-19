@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getCitationData, KNOWN_CITATIONS } from "../src/lib/citationSnippets.ts";
+import {
+  getCitationData,
+  getGithubCitationUrl,
+  detectSymbolAndLanguage,
+  fetchLiveCitationData,
+  KNOWN_CITATIONS,
+} from "../src/lib/citationSnippets.ts";
 
 test("CitationSnippets - retrieves ground-truth data for ast_parser.py", () => {
   const citation = getCitationData("backend/app/services/ast_parser.py", "42-88");
@@ -42,3 +48,57 @@ test("CitationSnippets - generates structured fallback for unknown source file",
   assert.ok(citation.code.length > 0);
   assert.ok(citation.denseScore > 0.8);
 });
+
+test("CitationSnippets - getGithubCitationUrl builds verified GitHub permalinks with anchors", () => {
+  const urlWithRange = getGithubCitationUrl(
+    "facebook/react",
+    "packages/react/src/React.js",
+    "42-88",
+    "main"
+  );
+  assert.equal(
+    urlWithRange,
+    "https://github.com/facebook/react/blob/main/packages/react/src/React.js#L42-L88"
+  );
+
+  const urlSingleLine = getGithubCitationUrl(
+    "AnshulKanodia/DevMind-AI-Engineering-Copilot",
+    "backend/app/main.py",
+    "15",
+    "main"
+  );
+  assert.equal(
+    urlSingleLine,
+    "https://github.com/AnshulKanodia/DevMind-AI-Engineering-Copilot/blob/main/backend/app/main.py#L15"
+  );
+});
+
+test("CitationSnippets - detectSymbolAndLanguage extracts AST types and symbol names", () => {
+  const pythonClass = detectSymbolAndLanguage(
+    "models.py",
+    "class UserProfile(BaseModel):\n    id: int"
+  );
+  assert.equal(pythonClass.language, "python");
+  assert.equal(pythonClass.nodeType, "ClassDef");
+  assert.equal(pythonClass.symbolName, "UserProfile");
+
+  const tsFunction = detectSymbolAndLanguage(
+    "auth.ts",
+    "export async function verifyToken(req: Request) {\n    return true;\n}"
+  );
+  assert.equal(tsFunction.language, "typescript");
+  assert.equal(tsFunction.nodeType, "FunctionDef");
+  assert.equal(tsFunction.symbolName, "verifyToken");
+});
+
+test("CitationSnippets - fetchLiveCitationData returns cached static data for internal services", async () => {
+  const citation = await fetchLiveCitationData(
+    "devmind",
+    "backend/app/services/ast_parser.py",
+    "42-88"
+  );
+  assert.equal(citation.file, "backend/app/services/ast_parser.py");
+  assert.equal(citation.symbolName, "ASTParserService");
+  assert.ok(citation.code.includes("class ASTParserService"));
+});
+

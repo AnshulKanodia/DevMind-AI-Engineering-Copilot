@@ -17,6 +17,7 @@ import {
   FileCode2,
   GitPullRequestDraft,
   Search,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +27,7 @@ import {
   streamAgentChat,
   AgentThought,
 } from "@/lib/chatStream";
+import { getGithubCitationUrl } from "@/lib/citationSnippets";
 
 export interface ChatMessage {
   id: string;
@@ -324,18 +326,28 @@ export function ChatView({
                           key={cIdx}
                           className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-300 hover:border-sky-500/50 transition-colors group cursor-pointer"
                           onClick={() => onOpenCitation?.(cite.file, cite.lines)}
-                          title="Click to preview citation"
+                          title="Click to preview citation in drawer"
                         >
-                          <Code2 className="h-3 w-3 text-sky-400" />
-                          <span className="truncate max-w-[220px]">{cite.file}</span>
-                          <span className="text-sky-400 font-semibold">:{cite.lines}</span>
+                          <Code2 className="h-3 w-3 text-sky-400 shrink-0" />
+                          <span className="truncate max-w-[200px]">{cite.file}</span>
+                          <span className="text-sky-400 font-semibold shrink-0">:{cite.lines}</span>
+                          <a
+                            href={getGithubCitationUrl(currentRepo, cite.file, cite.lines, currentBranch)}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="ml-1 text-slate-500 hover:text-sky-400 p-0.5 transition-colors shrink-0"
+                            title="Open lines directly on GitHub"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               copyCitation(fullRef);
                             }}
-                            className="ml-1 text-slate-500 hover:text-white"
+                            className="text-slate-500 hover:text-white p-0.5 shrink-0"
                             title="Copy reference"
                           >
                             {copiedCitation === fullRef ? (

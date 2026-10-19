@@ -16,7 +16,12 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getCitationData, CitationData } from "@/lib/citationSnippets";
+import {
+  getCitationData,
+  fetchLiveCitationData,
+  getGithubCitationUrl,
+  CitationData,
+} from "@/lib/citationSnippets";
 
 export interface CitationDrawerProps {
   open: boolean;
@@ -36,16 +41,33 @@ export function CitationDrawer({
   onAskCopilot,
 }: CitationDrawerProps) {
   const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [citationData, setCitationData] = useState<CitationData | null>(null);
 
   useEffect(() => {
+    let isCurrent = true;
     if (citation) {
-      const data = getCitationData(citation.file, citation.lines);
-      setCitationData(data);
+      setLoading(true);
+      const initial = getCitationData(citation.file, citation.lines);
+      setCitationData(initial);
+
+      fetchLiveCitationData(currentRepo, citation.file, citation.lines, currentBranch)
+        .then((live) => {
+          if (isCurrent && live) {
+            setCitationData(live);
+          }
+        })
+        .finally(() => {
+          if (isCurrent) setLoading(false);
+        });
     } else {
       setCitationData(null);
+      setLoading(false);
     }
-  }, [citation]);
+    return () => {
+      isCurrent = false;
+    };
+  }, [citation, currentRepo, currentBranch]);
 
   // Handle ESC key to close
   useEffect(() => {
@@ -57,6 +79,12 @@ export function CitationDrawer({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
+
+  const startLineNumber = React.useMemo(() => {
+    if (!citationData?.lines) return 1;
+    const parts = citationData.lines.split("-");
+    return parseInt(parts[0], 10) || 1;
+  }, [citationData]);
 
   if (!open || !citationData) return null;
 
@@ -73,7 +101,12 @@ export function CitationDrawer({
     onClose();
   };
 
-  const githubUrl = `https://github.com/${currentRepo}/blob/${currentBranch}/${citationData.file}#L${citationData.lines.replace("-", "-L")}`;
+  const githubUrl = getGithubCitationUrl(
+    currentRepo,
+    citationData.file,
+    citationData.lines,
+    currentBranch
+  );
   const codeLines = citationData.code.split("\n");
 
   return (
@@ -108,13 +141,26 @@ export function CitationDrawer({
               </div>
             </div>
 
-            <button
-              onClick={onClose}
-              className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ml-3"
-              title="Close drawer (Esc)"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <a
+                href={githubUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs border border-slate-700/60 transition-colors"
+                title="Open directly on GitHub"
+              >
+                <ExternalLink className="h-3.5 w-3.5 text-sky-400" />
+                <span className="hidden sm:inline font-mono text-[11px]">GitHub</span>
+              </a>
+
+              <button
+                onClick={onClose}
+                className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Close drawer (Esc)"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           {/* Retrieval Telemetry Bar */}
@@ -178,8 +224,8 @@ export function CitationDrawer({
                               : "hover:bg-slate-900/40"
                           }
                         >
-                          <td className="pr-4 text-right text-slate-600 select-none w-10 text-[11px] align-top pl-2">
-                            {i + 1}
+                          <td className="pr-4 text-right text-slate-600 select-none w-10 text-[11px] align-top pl-2 font-mono">
+                            {startLineNumber + i}
                           </td>
                           <td className="text-slate-200 whitespace-pre font-mono">
                             {line}
