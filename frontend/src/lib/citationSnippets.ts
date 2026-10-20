@@ -214,7 +214,7 @@ export const KNOWN_CITATIONS: Record<string, Partial<CitationData>> = {
 /**
  * Retrieves snippet data for a file and line range, or generates realistic fallback.
  */
-export function getCitationData(filePath: string, lines: string): CitationData {
+export function getCitationData(filePath: string, lines: string = "1-30"): CitationData {
   // Normalize file path lookup
   const cleanPath = filePath.trim();
   const matched = Object.entries(KNOWN_CITATIONS).find(([key]) =>
