@@ -447,3 +447,170 @@ If the code is clean, return an empty array [].`;
     model_used: modelUsed,
   };
 }
+
+export interface DiffLineItem {
+  type: "context" | "del" | "add";
+  content: string;
+  oldLine?: number;
+  newLine?: number;
+}
+
+export interface VulnerabilityPatch {
+  cwe: string;
+  title: string;
+  diffLines: DiffLineItem[];
+  explanation: string;
+  frameworkRecommendation: string;
+  rawPatch: string;
+}
+
+/**
+ * Generates an interactive, syntax-highlighted code diff patch and remediation rationale
+ * for any detected security finding.
+ */
+export function generateVulnerabilityPatch(finding: SecurityFinding): VulnerabilityPatch {
+  const line = finding.line || 1;
+  const cwe = (finding.cwe || "").toUpperCase();
+
+  if (cwe.includes("CWE-89") || finding.title.toLowerCase().includes("sql")) {
+    const original = finding.snippet || 'cursor.execute(f"SELECT * FROM users WHERE id = {user_id}")';
+    const diffLines: DiffLineItem[] = [
+      { type: "context", oldLine: Math.max(1, line - 1), newLine: Math.max(1, line - 1), content: "    # Query execution block" },
+      { type: "del", oldLine: line, content: `-    ${original}` },
+      { type: "add", newLine: line, content: "+    # Parameterized query with tuple binding (OWASP CWE-89 mitigation)" },
+      { type: "add", newLine: line + 1, content: '+    cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))' },
+      { type: "context", oldLine: line + 1, newLine: line + 2, content: "    rows = cursor.fetchall()" },
+    ];
+    return {
+      cwe: finding.cwe,
+      title: finding.title,
+      diffLines,
+      explanation:
+        "Replaces dynamic string concatenation with parameterized SQL bindings (%s / ? placeholders), ensuring user input cannot break query syntax or inject arbitrary commands.",
+      frameworkRecommendation:
+        "Use parameterized queries or ORM abstractions (e.g. SQLAlchemy, Prisma, Mongoose) for all dynamic SQL execution.",
+      rawPatch: `--- a/${finding.file}\n+++ b/${finding.file}\n@@ -${line},1 +${line},2 @@\n-${original}\n+# Parameterized query with tuple binding\n+cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))`,
+    };
+  }
+
+  if (
+    cwe.includes("CWE-78") ||
+    cwe.includes("CWE-94") ||
+    finding.title.toLowerCase().includes("command") ||
+    finding.title.toLowerCase().includes("injection")
+  ) {
+    const original = finding.snippet || "eval(user_input)";
+    const diffLines: DiffLineItem[] = [
+      { type: "context", oldLine: Math.max(1, line - 1), newLine: Math.max(1, line - 1), content: "    # Safe parser execution" },
+      { type: "del", oldLine: line, content: `-    ${original}` },
+      { type: "add", newLine: line, content: "+    # Safe execution via strict JSON schema deserialization" },
+      { type: "add", newLine: line + 1, content: "+    parsed_data = json.loads(user_input)" },
+      { type: "context", oldLine: line + 1, newLine: line + 2, content: "    return process_payload(parsed_data)" },
+    ];
+    return {
+      cwe: finding.cwe,
+      title: finding.title,
+      diffLines,
+      explanation:
+        "Eliminates dangerous eval/exec/os.system dynamic evaluation primitives that allow remote arbitrary code execution, substituting safe isolated JSON deserialization.",
+      frameworkRecommendation:
+        "Never evaluate code strings dynamically. Use structured serialization (JSON, Protobuf, Pydantic) to validate untrusted payloads.",
+      rawPatch: `--- a/${finding.file}\n+++ b/${finding.file}\n@@ -${line},1 +${line},2 @@\n-${original}\n+# Safe execution via strict JSON schema deserialization\n+parsed_data = json.loads(user_input)`,
+    };
+  }
+
+  if (
+    cwe.includes("CWE-798") ||
+    finding.title.toLowerCase().includes("secret") ||
+    finding.title.toLowerCase().includes("credential")
+  ) {
+    const original = finding.snippet || 'const api_key = "FAKE_EXAMPLE_TOKEN";';
+    const diffLines: DiffLineItem[] = [
+      { type: "context", oldLine: Math.max(1, line - 1), newLine: Math.max(1, line - 1), content: "    // Configuration loading" },
+      { type: "del", oldLine: line, content: `-    ${original}` },
+      { type: "add", newLine: line, content: "+    // Read token from environment variable with defensive guard" },
+      { type: "add", newLine: line + 1, content: '+    const apiKey = process.env.SERVICE_API_KEY || "";' },
+      { type: "add", newLine: line + 2, content: '+    if (!apiKey) throw new Error("Missing required SERVICE_API_KEY");' },
+      { type: "context", oldLine: line + 1, newLine: line + 3, content: "    return initializeClient(apiKey);" },
+    ];
+    return {
+      cwe: finding.cwe,
+      title: finding.title,
+      diffLines,
+      explanation:
+        "Removes static plain-text credential tokens from source control and extracts them to runtime environment variables with defensive absence validation.",
+      frameworkRecommendation:
+        "Inject secrets into container or serverless environments using Doppler, AWS Secrets Manager, or Google Secret Manager.",
+      rawPatch: `--- a/${finding.file}\n+++ b/${finding.file}\n@@ -${line},1 +${line},3 @@\n-${original}\n+const apiKey = process.env.SERVICE_API_KEY || "";\n+if (!apiKey) throw new Error("Missing required SERVICE_API_KEY");`,
+    };
+  }
+
+  if (
+    cwe.includes("CWE-328") ||
+    cwe.includes("CWE-327") ||
+    finding.title.toLowerCase().includes("crypto") ||
+    finding.title.toLowerCase().includes("hash")
+  ) {
+    const original = finding.snippet || "hashlib.md5(data.encode()).hexdigest()";
+    const diffLines: DiffLineItem[] = [
+      { type: "context", oldLine: Math.max(1, line - 1), newLine: Math.max(1, line - 1), content: "    # Digest computation" },
+      { type: "del", oldLine: line, content: `-    ${original}` },
+      { type: "add", newLine: line, content: "+    # Upgraded to cryptographic SHA-256 (FIPS compliant, collision resistant)" },
+      { type: "add", newLine: line + 1, content: "+    token_hash = hashlib.sha256(data.encode()).hexdigest()" },
+      { type: "context", oldLine: line + 1, newLine: line + 2, content: "    return token_hash" },
+    ];
+    return {
+      cwe: finding.cwe,
+      title: finding.title,
+      diffLines,
+      explanation:
+        "Upgrades obsolete, collision-vulnerable MD5 or SHA-1 hashing to modern cryptographic SHA-256.",
+      frameworkRecommendation:
+        "Use SHA-256 / SHA-3 for checksums and Argon2id or bcrypt for password hashing.",
+      rawPatch: `--- a/${finding.file}\n+++ b/${finding.file}\n@@ -${line},1 +${line},2 @@\n-${original}\n+token_hash = hashlib.sha256(data.encode()).hexdigest()`,
+    };
+  }
+
+  if (
+    cwe.includes("CWE-502") ||
+    finding.title.toLowerCase().includes("pickle") ||
+    finding.title.toLowerCase().includes("deserialization")
+  ) {
+    const original = finding.snippet || "data = pickle.loads(cached_payload)";
+    const diffLines: DiffLineItem[] = [
+      { type: "context", oldLine: Math.max(1, line - 1), newLine: Math.max(1, line - 1), content: "    # Cache retrieval" },
+      { type: "del", oldLine: line, content: `-    ${original}` },
+      { type: "add", newLine: line, content: "+    # Standard JSON deserialization without arbitrary code execution risk" },
+      { type: "add", newLine: line + 1, content: "+    data = json.loads(cached_payload)" },
+      { type: "context", oldLine: line + 1, newLine: line + 2, content: "    return data" },
+    ];
+    return {
+      cwe: finding.cwe,
+      title: finding.title,
+      diffLines,
+      explanation:
+        "Disallows Python pickle deserialization of untrusted payloads; enforces standard JSON and Pydantic schema validation.",
+      frameworkRecommendation:
+        "Use JSON, Protocol Buffers, or MessagePack instead of language-specific execution picklers.",
+      rawPatch: `--- a/${finding.file}\n+++ b/${finding.file}\n@@ -${line},1 +${line},2 @@\n-${original}\n+data = json.loads(cached_payload)`,
+    };
+  }
+
+  // Generic fallback
+  const original = finding.snippet || "// Vulnerable pattern";
+  const diffLines: DiffLineItem[] = [
+    { type: "context", oldLine: Math.max(1, line - 1), newLine: Math.max(1, line - 1), content: `    // Line ${Math.max(1, line - 1)} context` },
+    { type: "del", oldLine: line, content: `-    ${original}` },
+    { type: "add", newLine: line, content: `+    // Applied remediation for ${finding.cwe}` },
+    { type: "add", newLine: line + 1, content: `+    ${finding.remediation}` },
+    { type: "context", oldLine: line + 1, newLine: line + 2, content: `    // Line ${line + 1} context` },
+  ];
+  return {
+    cwe: finding.cwe,
+    title: finding.title,
+    diffLines,
+    explanation: finding.description || "Remediated code to comply with OWASP guidelines.",
+    frameworkRecommendation: finding.remediation || "Follow security best practices for parameter validation.",
+    rawPatch: `--- a/${finding.file}\n+++ b/${finding.file}\n@@ -${line},1 +${line},2 @@\n-${original}\n+${finding.remediation}`,
+  };
+}

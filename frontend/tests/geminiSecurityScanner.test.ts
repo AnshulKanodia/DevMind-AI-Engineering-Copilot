@@ -5,6 +5,7 @@ import {
   runLocalSecurityHeuristics,
   calculateSecurityScore,
   performSecurityAudit,
+  generateVulnerabilityPatch,
   type SecurityFinding,
 } from "../src/lib/geminiSecurityScanner.ts";
 import type { CodeSnippet } from "../src/lib/repoCodeFetcher.ts";
@@ -170,4 +171,52 @@ test("SecurityScanner - performSecurityAudit produces complete scan result for i
   assert.ok(result.findings.length > 0);
   assert.ok(result.findings[0].id.startsWith("DEV-SEC-"));
   assert.ok(result.findings[0].githubUrl?.startsWith("https://github.com/"));
+});
+
+test("SecurityScanner - generateVulnerabilityPatch builds structured unified diff for SQL injection (CWE-89)", () => {
+  const sqliFinding: SecurityFinding = {
+    id: "DEV-SEC-01",
+    severity: "high",
+    cwe: "CWE-89",
+    title: "SQL Injection Prevention",
+    file: "backend/routes/users.js",
+    line: 14,
+    status: "flagged",
+    engine: "DevMind AST",
+    owaspCategory: "A03:2021 - Injection",
+    description: "Unsanitized dynamic query",
+    remediation: "Use parameterized queries",
+    snippet: "cursor.execute(f\"SELECT * FROM users WHERE id = {user_id}\")",
+  };
+
+  const patch = generateVulnerabilityPatch(sqliFinding);
+  assert.equal(patch.cwe, "CWE-89");
+  assert.ok(patch.diffLines.length >= 3);
+  assert.ok(patch.diffLines.some((l) => l.type === "del"));
+  assert.ok(patch.diffLines.some((l) => l.type === "add" && l.content.includes("Parameterized query")));
+  assert.ok(patch.rawPatch.startsWith("--- a/backend/routes/users.js"));
+  assert.ok(patch.explanation.includes("parameterized SQL"));
+});
+
+test("SecurityScanner - generateVulnerabilityPatch builds safe execution replacement for command injection (CWE-78)", () => {
+  const cmdFinding: SecurityFinding = {
+    id: "DEV-SEC-02",
+    severity: "critical",
+    cwe: "CWE-78",
+    title: "Arbitrary Code Execution",
+    file: "backend/utils/eval.py",
+    line: 22,
+    status: "flagged",
+    engine: "DevMind AST",
+    owaspCategory: "A03:2021 - Injection",
+    description: "Dynamic eval execution",
+    remediation: "Use safe JSON parser",
+    snippet: "eval(user_payload)",
+  };
+
+  const patch = generateVulnerabilityPatch(cmdFinding);
+  assert.equal(patch.cwe, "CWE-78");
+  assert.ok(patch.diffLines.some((l) => l.type === "del" && l.content.includes("eval(user_payload)")));
+  assert.ok(patch.diffLines.some((l) => l.type === "add" && l.content.includes("json.loads")));
+  assert.ok(patch.explanation.includes("arbitrary code execution"));
 });

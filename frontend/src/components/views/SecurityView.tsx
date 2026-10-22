@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   ShieldAlert,
   ShieldCheck,
@@ -21,12 +21,23 @@ import {
   Cpu,
   RefreshCw,
   GitBranch,
+  FileDiff,
+  Copy,
+  CheckCheck,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { SecurityFinding, SecurityScanResult } from "@/lib/geminiSecurityScanner";
+import {
+  calculateSecurityScore,
+  generateVulnerabilityPatch,
+  type SecurityFinding,
+  type SecurityScanResult,
+  type VulnerabilityPatch,
+} from "@/lib/geminiSecurityScanner";
 
 export interface SecurityViewProps {
   currentRepo?: string;
@@ -42,6 +53,8 @@ export function SecurityView({
   const [selectedSeverity, setSelectedSeverity] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [fixedFindings, setFixedFindings] = useState<Record<string, boolean>>({});
+  const [expandedDiffId, setExpandedDiffId] = useState<string | null>(null);
+  const [copiedPatchId, setCopiedPatchId] = useState<string | null>(null);
   const [securityScore, setSecurityScore] = useState<number>(94);
   const [modelUsed, setModelUsed] = useState<string>("Gemini AI (gemini-2.5-flash)");
   const [scannedFilesCount, setScannedFilesCount] = useState<number>(6);
@@ -181,8 +194,26 @@ export function SecurityView({
     }
   };
 
-  const handleAutofix = (id: string) => {
-    setFixedFindings((prev) => ({ ...prev, [id]: true }));
+  const handleApplyPatch = (findingId: string) => {
+    setFixedFindings((prev) => ({ ...prev, [findingId]: true }));
+    const updated = findings.map((f) =>
+      f.id === findingId ? { ...f, status: "fixed" as const } : f
+    );
+    setFindings(updated);
+    const newScore = calculateSecurityScore(updated);
+    setSecurityScore(newScore);
+  };
+
+  const handleCopyPatch = (patch: VulnerabilityPatch, findingId: string) => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(patch.rawPatch);
+      setCopiedPatchId(findingId);
+      setTimeout(() => setCopiedPatchId(null), 2500);
+    }
+  };
+
+  const toggleDiff = (id: string) => {
+    setExpandedDiffId((prev) => (prev === id ? null : id));
   };
 
   const getGrade = (score: number) => {
@@ -205,10 +236,10 @@ export function SecurityView({
     return matchesSeverity && matchesSearch;
   });
 
-  const criticalCount = findings.filter((f) => f.severity === "critical").length;
-  const highCount = findings.filter((f) => f.severity === "high").length;
-  const mediumCount = findings.filter((f) => f.severity === "medium").length;
-  const lowCount = findings.filter((f) => f.severity === "low").length;
+  const criticalCount = findings.filter((f) => f.severity === "critical" && f.status !== "fixed").length;
+  const highCount = findings.filter((f) => f.severity === "high" && f.status !== "fixed").length;
+  const mediumCount = findings.filter((f) => f.severity === "medium" && f.status !== "fixed").length;
+  const lowCount = findings.filter((f) => f.severity === "low" && f.status !== "fixed").length;
 
   return (
     <div className="space-y-6">
@@ -230,7 +261,7 @@ export function SecurityView({
             </div>
           </div>
           <p className="text-xs text-slate-400">
-            Combines deterministic AST heuristics with Gemini AI reasoning to detect OWASP vulnerabilities, audit source code, and propose verified remediations.
+            Combines deterministic AST heuristics with Gemini AI reasoning to detect OWASP vulnerabilities, audit source code, and generate 1-click interactive autofix diff previews.
           </p>
         </div>
 
@@ -310,7 +341,7 @@ export function SecurityView({
 
         <Card>
           <CardContent className="p-4 space-y-1">
-            <span className="text-[10px] text-slate-400 uppercase font-semibold">Vulnerability Triage</span>
+            <span className="text-[10px] text-slate-400 uppercase font-semibold">Active Deficiencies</span>
             <div className="flex items-center gap-2 pt-1 font-mono text-xs">
               {criticalCount > 0 && (
                 <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">
@@ -328,7 +359,7 @@ export function SecurityView({
               </span>
             </div>
             <p className="text-[11px] text-slate-500">
-              {findings.length} total findings identified
+              {findings.filter((f) => f.status === "fixed").length} patches applied
             </p>
           </CardContent>
         </Card>
@@ -373,18 +404,28 @@ export function SecurityView({
           </div>
         ) : (
           filtered.map((item) => {
-            const isFixed = fixedFindings[item.id];
+            const isFixed = fixedFindings[item.id] || item.status === "fixed";
+            const isDiffExpanded = expandedDiffId === item.id;
+            const patch = generateVulnerabilityPatch(item);
+            const isCopied = copiedPatchId === item.id;
+
             return (
               <div
                 key={item.id}
-                className="p-5 rounded-xl border border-slate-800 bg-slate-950/80 hover:border-slate-700 transition-all space-y-3.5 shadow-md"
+                className={`p-5 rounded-xl border transition-all space-y-3.5 shadow-md ${
+                  isFixed
+                    ? "border-emerald-500/30 bg-emerald-950/10"
+                    : "border-slate-800 bg-slate-950/80 hover:border-slate-700"
+                }`}
               >
                 {/* Finding Title Row */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
                   <div className="flex items-center gap-2.5 flex-wrap">
                     <Badge
                       variant={
-                        item.severity === "critical" || item.severity === "high"
+                        isFixed
+                          ? "success"
+                          : item.severity === "critical" || item.severity === "high"
                           ? "destructive"
                           : item.severity === "medium"
                           ? "warning"
@@ -392,7 +433,7 @@ export function SecurityView({
                       }
                       className="uppercase font-mono text-[10px]"
                     >
-                      {item.severity}
+                      {isFixed ? "RESOLVED" : item.severity}
                     </Badge>
 
                     <span className="font-mono text-xs text-sky-400 font-semibold">
@@ -450,7 +491,7 @@ export function SecurityView({
                 </div>
 
                 {/* Code Snippet Box */}
-                {item.snippet && (
+                {item.snippet && !isDiffExpanded && (
                   <div className="rounded-lg border border-slate-800 bg-slate-900/80 overflow-hidden text-xs">
                     <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900 border-b border-slate-800 text-[11px] font-mono text-slate-400">
                       <div className="flex items-center gap-1.5 truncate">
@@ -468,6 +509,102 @@ export function SecurityView({
                   </div>
                 )}
 
+                {/* Interactive Code Diff Viewer Drawer */}
+                {isDiffExpanded && (
+                  <div className="rounded-xl border border-sky-500/30 bg-slate-950 overflow-hidden text-xs space-y-0 shadow-lg animate-in fade-in duration-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2 bg-slate-900/90 border-b border-slate-800 text-xs">
+                      <div className="flex items-center gap-2">
+                        <FileDiff className="h-4 w-4 text-sky-400" />
+                        <span className="font-mono text-slate-200 font-semibold">{item.file}</span>
+                        <span className="text-slate-500 font-mono">:L{item.line}</span>
+                        <Badge variant="glow" className="text-[10px]">Unified Diff</Badge>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleCopyPatch(patch, item.id)}
+                          className="h-6 text-[10px] flex items-center gap-1"
+                        >
+                          {isCopied ? (
+                            <>
+                              <CheckCheck className="h-3 w-3 text-emerald-400" />
+                              <span className="text-emerald-400">Copied Patch</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3 text-slate-400" />
+                              <span>Copy Patch</span>
+                            </>
+                          )}
+                        </Button>
+
+                        {!isFixed && (
+                          <Button
+                            size="sm"
+                            variant="glow"
+                            onClick={() => handleApplyPatch(item.id)}
+                            className="h-6 text-[10px] flex items-center gap-1"
+                          >
+                            <Check className="h-3 w-3" />
+                            <span>Apply Patch</span>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Diff Code Lines */}
+                    <div className="p-3 font-mono text-xs overflow-x-auto bg-[#070b14] space-y-0.5">
+                      {patch.diffLines.map((dLine, idx) => {
+                        const isAdd = dLine.type === "add";
+                        const isDel = dLine.type === "del";
+
+                        return (
+                          <div
+                            key={idx}
+                            className={`flex items-start px-2 py-0.5 rounded leading-relaxed ${
+                              isAdd
+                                ? "bg-emerald-500/15 text-emerald-300"
+                                : isDel
+                                ? "bg-rose-500/15 text-rose-300"
+                                : "text-slate-400 hover:bg-slate-900/40"
+                            }`}
+                          >
+                            <div className="w-8 text-right pr-2 text-slate-600 select-none text-[11px]">
+                              {dLine.oldLine || ""}
+                            </div>
+                            <div className="w-8 text-right pr-3 text-slate-600 select-none text-[11px]">
+                              {dLine.newLine || ""}
+                            </div>
+                            <div className="w-4 select-none text-slate-500 font-bold">
+                              {isAdd ? "+" : isDel ? "-" : " "}
+                            </div>
+                            <div className="flex-1 whitespace-pre font-mono">
+                              {dLine.content}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Gemini Explanation Rationale */}
+                    <div className="p-3 bg-slate-900/60 border-t border-slate-800 text-xs space-y-1.5 text-slate-300">
+                      <div className="flex items-center gap-1.5 text-sky-400 font-semibold">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        <span>Why this fix works:</span>
+                      </div>
+                      <p className="text-slate-400 leading-relaxed pl-5">
+                        {patch.explanation}
+                      </p>
+                      <div className="text-[11px] text-slate-500 pl-5">
+                        <strong className="text-slate-400">Best Practice:</strong>{" "}
+                        {patch.frameworkRecommendation}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Remediation & Action Bar */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-800/60 text-xs text-slate-400">
                   <div className="flex items-center gap-1.5 truncate">
@@ -475,16 +612,42 @@ export function SecurityView({
                     <span className="truncate">Remediation: {item.remediation}</span>
                   </div>
 
-                  <Button
-                    size="sm"
-                    variant={isFixed ? "secondary" : "outline"}
-                    onClick={() => handleAutofix(item.id)}
-                    disabled={isFixed}
-                    className="text-xs h-7 shrink-0"
-                  >
-                    <Wrench className="h-3 w-3 mr-1" />
-                    <span>{isFixed ? "Autofix Applied" : "Generate Autofix"}</span>
-                  </Button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => toggleDiff(item.id)}
+                      className="text-xs h-7 shrink-0 flex items-center gap-1 text-sky-400 hover:text-white"
+                    >
+                      <FileDiff className="h-3 w-3" />
+                      <span>{isDiffExpanded ? "Hide Diff" : "Preview Diff"}</span>
+                      {isDiffExpanded ? (
+                        <ChevronUp className="h-3 w-3 ml-0.5" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3 ml-0.5" />
+                      )}
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant={isFixed ? "secondary" : "glow"}
+                      onClick={() => handleApplyPatch(item.id)}
+                      disabled={isFixed}
+                      className="text-xs h-7 shrink-0 flex items-center gap-1"
+                    >
+                      {isFixed ? (
+                        <>
+                          <Check className="h-3 w-3 mr-1 text-emerald-400" />
+                          <span>Patch Applied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Wrench className="h-3 w-3 mr-1" />
+                          <span>Apply Autofix</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             );
