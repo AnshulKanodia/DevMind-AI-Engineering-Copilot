@@ -134,7 +134,12 @@ export function DeveloperPortal() {
                 onOpenCitation={handleOpenCitation}
               />
             )}
-            {activeTab === "security" && <SecurityView />}
+            {activeTab === "security" && (
+              <SecurityView
+                currentRepo={currentRepo}
+                currentBranch={currentBranch}
+              />
+            )}
             {activeTab === "tests" && <TestsView />}
             {activeTab === "pr_review" && <PRReviewView />}
             {activeTab === "repo" && (
