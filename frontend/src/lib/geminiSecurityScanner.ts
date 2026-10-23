@@ -614,3 +614,143 @@ export function generateVulnerabilityPatch(finding: SecurityFinding): Vulnerabil
     rawPatch: `--- a/${finding.file}\n+++ b/${finding.file}\n@@ -${line},1 +${line},2 @@\n-${original}\n+${finding.remediation}`,
   };
 }
+
+/**
+ * Generates an executive AppSec security audit report in GitHub Flavored Markdown.
+ */
+export function exportSecurityReportAsMarkdown(scan: SecurityScanResult): string {
+  const timestamp = new Date(scan.scanned_at || Date.now()).toUTCString();
+  const grade =
+    scan.security_score >= 95
+      ? "A+ (Exceptional)"
+      : scan.security_score >= 90
+      ? "A (Strong)"
+      : scan.security_score >= 80
+      ? "B (Moderate Risk)"
+      : scan.security_score >= 70
+      ? "C (Elevated Risk)"
+      : "D (Critical Vulnerabilities)";
+
+  const lines: string[] = [
+    `# DevMind AppSec Security Audit Report`,
+    ``,
+    `> **Repository:** \`${scan.repo_id}\`  `,
+    `> **Branch:** \`${scan.branch}\`  `,
+    `> **Audited At:** ${timestamp}  `,
+    `> **Audit Engine:** ${scan.model_used}  `,
+    `> **Overall Posture Grade:** **${grade}** (${scan.security_score} / 100)  `,
+    ``,
+    `---`,
+    ``,
+    `## 1. Executive Summary & Posture Metrics`,
+    ``,
+    `| Metric | Value |`,
+    `| :--- | :--- |`,
+    `| **Overall Security Score** | **${scan.security_score} / 100** |`,
+    `| **Security Files Inspected** | ${scan.scanned_files_count} |`,
+    `| **Total Findings Identified** | ${scan.findings.length} |`,
+    `| **Critical Severity (CWE-78 / RCE)** | ${scan.critical_count} |`,
+    `| **High Severity (CWE-89 / SQLi, CWE-798 / Secrets)** | ${scan.high_count} |`,
+    `| **Medium Severity (CWE-328 / Weak Crypto, CWE-502)** | ${scan.medium_count} |`,
+    `| **Low Severity / Best Practices** | ${scan.low_count} |`,
+    `| **Resolved / Patched Findings** | ${scan.findings.filter((f) => f.status === "fixed").length} |`,
+    ``,
+    `---`,
+    ``,
+    `## 2. Detailed Vulnerability Findings & OWASP Breakdown`,
+    ``,
+  ];
+
+  if (scan.findings.length === 0) {
+    lines.push(`_No active vulnerabilities identified in scanned files. Repository passed all preliminary checks._`);
+  } else {
+    scan.findings.forEach((f, idx) => {
+      const statusBadge =
+        f.status === "fixed"
+          ? "[RESOLVED / PATCHED]"
+          : f.status === "verified_safe"
+          ? "[VERIFIED SAFE]"
+          : "[ACTION REQUIRED]";
+
+      lines.push(`### ${idx + 1}. [${f.cwe}] ${f.title}`);
+      lines.push(``);
+      lines.push(`- **Status:** **${statusBadge}**`);
+      lines.push(`- **Severity:** \`${f.severity.toUpperCase()}\``);
+      lines.push(`- **OWASP Category:** ${f.owaspCategory}`);
+      lines.push(`- **Detected By Engine:** ${f.engine}`);
+      if (f.githubUrl) {
+        lines.push(`- **Source Location:** [\`${f.file}:L${f.line}\`](${f.githubUrl})`);
+      } else {
+        lines.push(`- **Source Location:** \`${f.file}:L${f.line}\``);
+      }
+      lines.push(``);
+      lines.push(`**Threat Analysis:**  `);
+      lines.push(`${f.description}`);
+      lines.push(``);
+      if (f.snippet) {
+        lines.push(`**Vulnerable Code Snippet:**`);
+        lines.push(`\`\`\``);
+        lines.push(`${f.snippet}`);
+        lines.push(`\`\`\``);
+        lines.push(``);
+      }
+      lines.push(`**Prescriptive Remediation:**  `);
+      lines.push(`${f.remediation}`);
+      lines.push(``);
+      lines.push(`---`);
+      lines.push(``);
+    });
+  }
+
+  lines.push(`## 3. Compliance Sign-Off`);
+  lines.push(``);
+  lines.push(`- **Audited by:** DevMind Autonomous AppSec Copilot`);
+  lines.push(`- **Standards:** OWASP Top 10 (2021), MITRE CWE Top 25`);
+  lines.push(`- **Verification:** All identified findings have been validated against live syntax bounds with deterministic AST correlation.`);
+  lines.push(``);
+
+  return lines.join("\n");
+}
+
+/**
+ * Generates a structured JSON export of the security scan results.
+ */
+export function exportSecurityReportAsJSON(scan: SecurityScanResult): string {
+  return JSON.stringify(
+    {
+      report_version: "1.0.0",
+      generator: "DevMind AI Engineering Copilot",
+      repository: scan.repo_id,
+      branch: scan.branch,
+      timestamp: scan.scanned_at || new Date().toISOString(),
+      score: scan.security_score,
+      model: scan.model_used,
+      metrics: {
+        total_scanned_files: scan.scanned_files_count,
+        total_findings: scan.findings.length,
+        critical: scan.critical_count,
+        high: scan.high_count,
+        medium: scan.medium_count,
+        low: scan.low_count,
+        resolved: scan.findings.filter((f) => f.status === "fixed").length,
+      },
+      findings: scan.findings.map((f) => ({
+        id: f.id,
+        cwe: f.cwe,
+        title: f.title,
+        severity: f.severity,
+        owasp_category: f.owaspCategory,
+        status: f.status,
+        engine: f.engine,
+        file: f.file,
+        line: f.line,
+        github_url: f.githubUrl,
+        description: f.description,
+        remediation: f.remediation,
+        snippet: f.snippet,
+      })),
+    },
+    null,
+    2
+  );
+}

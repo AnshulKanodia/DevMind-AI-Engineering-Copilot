@@ -26,6 +26,8 @@ import {
   CheckCheck,
   ChevronDown,
   ChevronUp,
+  Download,
+  FileText,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +36,8 @@ import { Input } from "@/components/ui/input";
 import {
   calculateSecurityScore,
   generateVulnerabilityPatch,
+  exportSecurityReportAsMarkdown,
+  exportSecurityReportAsJSON,
   type SecurityFinding,
   type SecurityScanResult,
   type VulnerabilityPatch,
@@ -216,6 +220,50 @@ export function SecurityView({
     setExpandedDiffId((prev) => (prev === id ? null : id));
   };
 
+  const handleDownloadReport = (format: "md" | "json") => {
+    const scanData: SecurityScanResult = {
+      repo_id: currentRepo,
+      branch: currentBranch,
+      scanned_files_count: scannedFilesCount,
+      security_score: securityScore,
+      critical_count: criticalCount,
+      high_count: highCount,
+      medium_count: mediumCount,
+      low_count: lowCount,
+      findings: findings,
+      scanned_at: lastScannedAt || new Date().toISOString(),
+      model_used: modelUsed,
+    };
+
+    let content = "";
+    let filename = "";
+    let mimeType = "";
+
+    const repoCleanName = currentRepo.split("/").pop() || "repository";
+
+    if (format === "md") {
+      content = exportSecurityReportAsMarkdown(scanData);
+      filename = `DevMind-Security-Report-${repoCleanName}-${currentBranch}.md`;
+      mimeType = "text/markdown;charset=utf-8;";
+    } else {
+      content = exportSecurityReportAsJSON(scanData);
+      filename = `DevMind-Security-Report-${repoCleanName}-${currentBranch}.json`;
+      mimeType = "application/json;charset=utf-8;";
+    }
+
+    if (typeof window !== "undefined") {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  };
+
   const getGrade = (score: number) => {
     if (score >= 95) return { grade: "A+", label: "Zero Critical Vulnerabilities", color: "text-emerald-400" };
     if (score >= 90) return { grade: "A", label: "Strong Security Baseline", color: "text-emerald-400" };
@@ -265,18 +313,41 @@ export function SecurityView({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           {lastScannedAt && (
-            <span className="text-[11px] text-slate-500 hidden sm:inline">
+            <span className="text-[11px] text-slate-500 hidden md:inline">
               Audited at {lastScannedAt}
             </span>
           )}
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleDownloadReport("md")}
+            className="h-8 text-xs flex items-center gap-1.5 border-slate-700 bg-slate-800/80 hover:bg-slate-800 text-slate-200"
+            title="Export Compliance Report as Markdown"
+          >
+            <FileText className="h-3.5 w-3.5 text-sky-400" />
+            <span>Export .MD</span>
+          </Button>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleDownloadReport("json")}
+            className="h-8 text-xs flex items-center gap-1.5 border-slate-700 bg-slate-800/80 hover:bg-slate-800 text-slate-200"
+            title="Export Structured Security Findings as JSON"
+          >
+            <Download className="h-3.5 w-3.5 text-emerald-400" />
+            <span>Export .JSON</span>
+          </Button>
+
           <Button
             onClick={handleScan}
             disabled={scanning}
             variant="glow"
             size="sm"
-            className="flex items-center gap-2 text-xs"
+            className="h-8 flex items-center gap-2 text-xs"
           >
             {scanning ? (
               <>

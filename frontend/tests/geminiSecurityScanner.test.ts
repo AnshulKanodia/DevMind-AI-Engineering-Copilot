@@ -6,7 +6,10 @@ import {
   calculateSecurityScore,
   performSecurityAudit,
   generateVulnerabilityPatch,
+  exportSecurityReportAsMarkdown,
+  exportSecurityReportAsJSON,
   type SecurityFinding,
+  type SecurityScanResult,
 } from "../src/lib/geminiSecurityScanner.ts";
 import type { CodeSnippet } from "../src/lib/repoCodeFetcher.ts";
 
@@ -219,4 +222,69 @@ test("SecurityScanner - generateVulnerabilityPatch builds safe execution replace
   assert.ok(patch.diffLines.some((l) => l.type === "del" && l.content.includes("eval(user_payload)")));
   assert.ok(patch.diffLines.some((l) => l.type === "add" && l.content.includes("json.loads")));
   assert.ok(patch.explanation.includes("arbitrary code execution"));
+});
+
+test("SecurityScanner - exportSecurityReportAsMarkdown generates valid report with metrics and line anchors", () => {
+  const sampleScan: SecurityScanResult = {
+    repo_id: "AnshulKanodia/Personal-Finance-Management",
+    branch: "main",
+    scanned_files_count: 5,
+    security_score: 85,
+    critical_count: 0,
+    high_count: 1,
+    medium_count: 0,
+    low_count: 0,
+    model_used: "Gemini AI (gemini-2.5-flash)",
+    scanned_at: "2026-10-23T18:00:00.000Z",
+    findings: [
+      {
+        id: "DEV-SEC-01",
+        severity: "high",
+        cwe: "CWE-89",
+        title: "SQL Injection Prevention",
+        file: "backend/routes/users.js",
+        line: 14,
+        status: "flagged",
+        engine: "Gemini AI",
+        owaspCategory: "A03:2021 - Injection",
+        description: "Dynamic SQL parameter formatting",
+        remediation: "Use parameterized queries",
+        snippet: "db.execute(query)",
+        githubUrl: "https://github.com/AnshulKanodia/Personal-Finance-Management/blob/main/backend/routes/users.js#L14",
+      },
+    ],
+  };
+
+  const md = exportSecurityReportAsMarkdown(sampleScan);
+  assert.ok(md.includes("# DevMind AppSec Security Audit Report"));
+  assert.ok(md.includes("AnshulKanodia/Personal-Finance-Management"));
+  assert.ok(md.includes("85 / 100"));
+  assert.ok(md.includes("CWE-89"));
+  assert.ok(md.includes("https://github.com/AnshulKanodia/Personal-Finance-Management/blob/main/backend/routes/users.js#L14"));
+  assert.ok(md.includes("Compliance Sign-Off"));
+});
+
+test("SecurityScanner - exportSecurityReportAsJSON produces valid JSON schema for CI/CD", () => {
+  const sampleScan: SecurityScanResult = {
+    repo_id: "AnshulKanodia/DevMind-AI-Engineering-Copilot",
+    branch: "main",
+    scanned_files_count: 4,
+    security_score: 100,
+    critical_count: 0,
+    high_count: 0,
+    medium_count: 0,
+    low_count: 0,
+    model_used: "Gemini AI",
+    scanned_at: "2026-10-23T18:00:00.000Z",
+    findings: [],
+  };
+
+  const jsonStr = exportSecurityReportAsJSON(sampleScan);
+  const parsed = JSON.parse(jsonStr);
+
+  assert.equal(parsed.report_version, "1.0.0");
+  assert.equal(parsed.repository, "AnshulKanodia/DevMind-AI-Engineering-Copilot");
+  assert.equal(parsed.score, 100);
+  assert.equal(parsed.metrics.total_scanned_files, 4);
+  assert.equal(Array.isArray(parsed.findings), true);
 });
